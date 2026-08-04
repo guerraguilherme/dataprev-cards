@@ -1,0 +1,20 @@
+DATAPREV CARDS — PWA | ETAPA 1
+
+CONTEÚDO
+- index.html
+- manifest.webmanifest
+- service-worker.js
+- pasta icons
+
+OBJETIVO DESTA ETAPA
+Publicar gratuitamente no GitHub Pages e instalar o DATAPREV Cards
+na tela inicial do iPhone.
+
+IMPORTANTE
+1. Envie os ARQUIVOS EXTRAÍDOS para o repositório. Não envie apenas o ZIP.
+2. O progresso salvo no Textastic não migra sozinho para o endereço da PWA.
+3. Antes da migração, exporte o checkpoint no aplicativo antigo.
+4. Depois de abrir a PWA hospedada, importe esse checkpoint.
+5. O app continuará funcionando offline após a primeira abertura bem-sucedida.
+
+A integração com a planilha e com o ChatGPT será feita em uma etapa posterior.
