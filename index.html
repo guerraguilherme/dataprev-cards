@@ -12,7 +12,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 
-<title>DATAPREV Cards — PWA 1.4.1</title>
+<title>DATAPREV Cards — PWA 1.5</title>
 <style>
 :root {
   --bg:#f4f6f8; --card:#ffffff; --text:#17202a; --muted:#667085;
@@ -124,6 +124,35 @@ details summary{cursor:pointer;font-weight:700}
 .completion .row{justify-content:center;margin-top:14px}
 .completion .row button{min-width:170px}
 
+
+.rich-block{margin:10px 0;border:1px solid var(--line);border-radius:13px;padding:12px;line-height:1.5;background:#f7f9fb}
+.rich-block h3{font-size:1rem;margin:0 0 7px}
+.rich-block.conceito{background:#f3f6fa}
+.rich-block.exemplo{background:#eef6ff;border-color:#b9d7ff}
+.rich-block.alerta{background:var(--warnbg);border-color:#ead48f;color:#4a3300}
+.rich-block.nota{background:#f8f5ff;border-color:#d8c8ff}
+.rich-block.formula{background:#f4fbf7;border-color:#b9dfc8;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.rich-block pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;background:#111827;color:#f8fafc;padding:12px;border-radius:10px;overflow:auto}
+.rich-table-wrap{overflow:auto}
+.rich-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.rich-table th,.rich-table td{border:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
+.rich-table th{background:#edf2f7}
+.compare-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.compare-item{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff}
+.tabs-shell{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.tabs-nav{display:flex;gap:0;overflow:auto;background:#eef2f6}
+.tabs-nav button{border:0;border-radius:0;background:transparent;white-space:nowrap}
+.tabs-nav button.active{background:#fff;color:var(--accent);box-shadow:inset 0 -3px 0 var(--accent)}
+.tab-panel{padding:12px;background:#fff}
+.generation-grid{display:grid;gap:9px}
+.generation-status{padding:10px 11px;border:1px solid var(--line);border-radius:11px;background:#f7f9fb;line-height:1.4}
+.generation-status.ok{background:var(--okbg);border-color:#9bd7b8;color:#075c34}
+.generation-status.bad{background:var(--badbg);border-color:#f0a8a1;color:#8e1b12}
+.generation-status.wait{background:var(--warnbg);border-color:#ead48f;color:#5d4200}
+.switch-line{display:flex;align-items:center;gap:9px}
+.switch-line input{width:auto}
+@media (max-width:560px){.compare-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -131,11 +160,12 @@ details summary{cursor:pointer;font-weight:700}
   <div class="top">
     <div>
       <div class="brand">DATAPREV Cards</div>
-      <div class="small" id="contentSummary">Catálogo local · PWA 1.4</div>
+      <div class="small" id="contentSummary">Catálogo local · PWA 1.5</div>
     </div>
     <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <span class="badge" style="color:#0f7b45;border-color:#9bd7b8;background:#e9f8f0">Offline pronto</span>
       <span class="badge" id="syncBadge">Sync não configurada</span>
+      <span class="badge" id="generationBadge">Fila automática</span>
       <span class="badge" id="modeBadge">Trilha</span>
     </div>
   </div>
@@ -216,6 +246,26 @@ details summary{cursor:pointer;font-weight:700}
     </div>
   </details>
 
+  <details class="panel" id="generationPanel">
+    <summary>Automação de novos cards</summary>
+    <div class="generation-grid" style="margin-top:12px">
+      <label class="switch-line">
+        <input id="generationEnabled" type="checkbox" checked>
+        <span>Solicitar automaticamente um novo lote quando o estoque ficar baixo</span>
+      </label>
+      <div class="small" id="generationRuleText">
+        Regra padrão: solicitar 20 cards quando restarem 10 ou menos.
+      </div>
+      <div class="row">
+        <button id="requestGenerationBtn">Solicitar lote agora</button>
+        <button id="refreshGenerationBtn">Atualizar status</button>
+      </div>
+      <div class="generation-status" id="generationStatus" role="status" aria-live="polite">
+        A fila ainda não foi consultada nesta abertura.
+      </div>
+    </div>
+  </details>
+
   <section class="panel" id="loadingPanel">
     <b>Carregando banco de cards…</b>
     <div class="small" style="margin-top:6px">Na primeira abertura após a atualização, mantenha a internet ativa.</div>
@@ -236,14 +286,16 @@ details summary{cursor:pointer;font-weight:700}
       role="status" aria-live="polite" style="margin-top:14px">
       Toque em “Buscar novos cards” para verificar novas publicações.
     </div>
+    <div class="generation-status" id="completionGenerationStatus"
+      role="status" aria-live="polite" style="margin-top:10px">
+      A fila automática será consultada após a sincronização.
+    </div>
   </section>
 
   <section class="card hidden" id="studyCard">
     <div class="kicker" id="kicker"></div>
     <h1 id="title"></h1>
-    <div class="info ex" id="explanation"></div>
-    <div class="info ex" id="example"></div>
-    <div class="info tip" id="trap"></div>
+    <div id="contentBlocks"></div>
 
     <div id="questionArea"></div>
 
@@ -272,14 +324,17 @@ details summary{cursor:pointer;font-weight:700}
 let CARDS = [];
 let CONTENT_VERSION = "";
 const KEY = "dataprev_cards_mvp01";
-const APP_VERSION = "1.4.1";
+const APP_VERSION = "1.5";
 const SYNC_CONFIG_KEY = "dataprev_cards_sync_config_v1";
 const CATALOG_DB_NAME = "dataprev_cards_catalog_db";
 const CATALOG_STORE = "catalog";
 const CATALOG_RECORD_KEY = "active";
+const GENERATION_LOCAL_KEY = "dataprev_cards_generation_v1";
 let syncConfig = loadSyncConfig();
+let generationState = loadGenerationState();
 let syncInProgress = false;
 let catalogCheckInProgress = false;
+let generationRequestInProgress = false;
 let catalogSource = "local";
 
 let state = JSON.parse(localStorage.getItem(KEY) || "null") || {
@@ -347,6 +402,89 @@ function loadSyncConfig(){
 
 function saveSyncConfig(){
   localStorage.setItem(SYNC_CONFIG_KEY,JSON.stringify(syncConfig));
+}
+
+function loadGenerationState(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(GENERATION_LOCAL_KEY)||"null")||{};
+    return {
+      enabled:saved.enabled!==false,
+      threshold:Number(saved.threshold)||10,
+      batchSize:Number(saved.batchSize)||20,
+      lastRequestId:String(saved.lastRequestId||""),
+      lastRequestVersion:String(saved.lastRequestVersion||""),
+      lastStatus:String(saved.lastStatus||""),
+      lastCheckedAt:String(saved.lastCheckedAt||"")
+    };
+  }catch{
+    return {
+      enabled:true,
+      threshold:10,
+      batchSize:20,
+      lastRequestId:"",
+      lastRequestVersion:"",
+      lastStatus:"",
+      lastCheckedAt:""
+    };
+  }
+}
+
+function saveGenerationState(){
+  localStorage.setItem(GENERATION_LOCAL_KEY,JSON.stringify(generationState));
+}
+
+function setGenerationStatus(message,type=""){
+  ["generationStatus","completionGenerationStatus"].forEach(id=>{
+    const box=document.getElementById(id);
+    if(!box) return;
+    box.textContent=message;
+    box.className="generation-status"+(type?" "+type:"");
+  });
+
+  const badge=document.getElementById("generationBadge");
+  if(!badge) return;
+
+  if(type==="ok"){
+    badge.textContent="Fila pronta";
+    badge.style.color="#0f7b45";
+    badge.style.borderColor="#9bd7b8";
+    badge.style.background="#e9f8f0";
+  }else if(type==="wait"){
+    badge.textContent="Lote solicitado";
+    badge.style.color="#8a5b00";
+    badge.style.borderColor="#ead48f";
+    badge.style.background="#fff7df";
+  }else if(type==="bad"){
+    badge.textContent="Fila com erro";
+    badge.style.color="#b42318";
+    badge.style.borderColor="#f0a8a1";
+    badge.style.background="#fff0ee";
+  }else{
+    badge.textContent=generationState.enabled?"Fila automática":"Fila pausada";
+    badge.removeAttribute("style");
+  }
+}
+
+function populateGenerationUI(){
+  const enabled=document.getElementById("generationEnabled");
+  if(enabled) enabled.checked=generationState.enabled;
+
+  const ruleText=document.getElementById("generationRuleText");
+  if(ruleText){
+    ruleText.textContent=
+      `Regra ativa: solicitar ${generationState.batchSize} cards quando restarem `+
+      `${generationState.threshold} ou menos.`;
+  }
+
+  if(generationState.lastStatus){
+    setGenerationStatus(generationState.lastStatus,"");
+  }else{
+    setGenerationStatus(
+      generationState.enabled
+        ?"Automação ativa. A fila será verificada após sincronizar."
+        :"Automação pausada neste aparelho."
+    );
+  }
 }
 
 function normalizeEndpoint(value){
@@ -610,6 +748,14 @@ async function applyCatalog(payload,source){
   updateContentSummary();
   render();
 
+  if(newCards>0){
+    generationState.lastStatus=
+      `${newCards} novo(s) card(s) recebido(s). A fila automática continua ativa.`;
+    generationState.lastRequestVersion=CONTENT_VERSION;
+    saveGenerationState();
+    setGenerationStatus(generationState.lastStatus,"ok");
+  }
+
   return {
     previousCount,
     currentCount:CARDS.length,
@@ -858,6 +1004,7 @@ async function syncNow(){
     );
 
     await checkForNewCards({silent:true});
+    await maybeRequestGeneration({triggerType:"after_sync"});
   }catch(error){
     console.error(error);
     setSyncStatus(error.message||String(error),"bad");
@@ -877,6 +1024,290 @@ function clearSyncConfig(){
   populateSyncUI();
 }
 
+
+
+function escapeHtml(value){
+  return String(value??"")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+function textToHtml(value){
+  return escapeHtml(value).replace(/\n/g,"<br>");
+}
+
+function normalizeCardBlocks(card){
+  if(Array.isArray(card.blocos) && card.blocos.length){
+    return card.blocos;
+  }
+
+  return [
+    {tipo:"conceito",titulo:"Explicação",conteudo:card.explicacao||""},
+    {tipo:"exemplo",titulo:"Exemplo",conteudo:card.exemplo||""},
+    {tipo:"alerta",titulo:"Pegadinha FGV",conteudo:card.pegadinha||""}
+  ].filter(block=>String(block.conteudo||"").trim());
+}
+
+function renderSingleBlock(block,index){
+  const type=String(block?.tipo||"conceito").toLowerCase();
+  const title=block?.titulo?`<h3>${escapeHtml(block.titulo)}</h3>`:"";
+
+  if(["conceito","exemplo","alerta","nota","formula"].includes(type)){
+    return `<section class="rich-block ${type}">${title}<div>${textToHtml(block.conteudo||"")}</div></section>`;
+  }
+
+  if(type==="codigo"){
+    return `<section class="rich-block codigo">${title}<pre><code>${escapeHtml(block.codigo||block.conteudo||"")}</code></pre></section>`;
+  }
+
+  if(type==="lista"){
+    const items=Array.isArray(block.itens)?block.itens:[];
+    return `<section class="rich-block lista">${title}<ul>${items.map(item=>`<li>${textToHtml(item)}</li>`).join("")}</ul></section>`;
+  }
+
+  if(type==="tabela"){
+    const headers=Array.isArray(block.cabecalho)?block.cabecalho:[];
+    const rows=Array.isArray(block.linhas)?block.linhas:[];
+    return `<section class="rich-block tabela">${title}<div class="rich-table-wrap"><table class="rich-table">`+
+      (headers.length?`<thead><tr>${headers.map(cell=>`<th>${textToHtml(cell)}</th>`).join("")}</tr></thead>`:"")+
+      `<tbody>${rows.map(row=>`<tr>${(Array.isArray(row)?row:[]).map(cell=>`<td>${textToHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody>`+
+      `</table></div></section>`;
+  }
+
+  if(type==="comparacao"){
+    const columns=Array.isArray(block.colunas)?block.colunas:[];
+    return `<section class="rich-block comparacao">${title}<div class="compare-grid">`+
+      columns.map(column=>`<div class="compare-item"><b>${escapeHtml(column.titulo||"")}</b><div style="margin-top:6px">${textToHtml(column.conteudo||"")}</div>`+
+        (Array.isArray(column.itens)?`<ul>${column.itens.map(item=>`<li>${textToHtml(item)}</li>`).join("")}</ul>`:"")+
+      `</div>`).join("")+
+      `</div></section>`;
+  }
+
+  if(type==="abas"){
+    const tabs=Array.isArray(block.abas)?block.abas:[];
+    const group=`tabs-${index}-${Math.random().toString(36).slice(2,7)}`;
+    return `<section class="rich-block abas">${title}<div class="tabs-shell" data-tabs="${group}">`+
+      `<div class="tabs-nav">${tabs.map((tab,tabIndex)=>`<button class="${tabIndex===0?"active":""}" data-tab="${tabIndex}">${escapeHtml(tab.titulo||`Aba ${tabIndex+1}`)}</button>`).join("")}</div>`+
+      tabs.map((tab,tabIndex)=>`<div class="tab-panel ${tabIndex===0?"":"hidden"}" data-panel="${tabIndex}">${textToHtml(tab.conteudo||"")}</div>`).join("")+
+      `</div></section>`;
+  }
+
+  return `<section class="rich-block conceito">${title}<div>${textToHtml(block.conteudo||"")}</div></section>`;
+}
+
+function renderContentBlocks(card){
+  const blocks=normalizeCardBlocks(card);
+  const container=document.getElementById("contentBlocks");
+  container.innerHTML=blocks.map(renderSingleBlock).join("");
+
+  container.querySelectorAll("[data-tabs]").forEach(shell=>{
+    const buttons=[...shell.querySelectorAll(".tabs-nav button")];
+    const panels=[...shell.querySelectorAll(".tab-panel")];
+
+    buttons.forEach(button=>{
+      button.onclick=()=>{
+        const target=Number(button.dataset.tab);
+        buttons.forEach((item,index)=>item.classList.toggle("active",index===target));
+        panels.forEach((panel,index)=>panel.classList.toggle("hidden",index!==target));
+      };
+    });
+  });
+}
+
+function remainingCardsCount(){
+  return CARDS.filter(card=>!isCardComplete(card)).length;
+}
+
+async function fetchGenerationRules(){
+  if(!syncConfig.endpoint || !syncConfig.token) return null;
+
+  try{
+    const result=await jsonpRequest(syncConfig.endpoint,{
+      action:"generation_rules",
+      token:syncConfig.token
+    },20000);
+
+    if(result?.ok){
+      generationState.threshold=Number(result.generation_threshold_remaining)||10;
+      generationState.batchSize=Number(result.generation_batch_size)||20;
+      saveGenerationState();
+      populateGenerationUI();
+      return result;
+    }
+  }catch(error){
+    console.warn("Regras remotas indisponíveis; usando padrão local.",error);
+  }
+
+  return null;
+}
+
+async function refreshGenerationStatus({silent=false}={}){
+  if(!syncConfig.endpoint || !syncConfig.token){
+    if(!silent) setGenerationStatus("Configure a sincronização antes de consultar a fila.","bad");
+    return null;
+  }
+
+  try{
+    if(!silent) setGenerationStatus("Consultando a fila de geração…","wait");
+
+    const result=await jsonpRequest(syncConfig.endpoint,{
+      action:"generation_status",
+      token:syncConfig.token,
+      device_id:syncConfig.deviceId
+    },20000);
+
+    generationState.lastCheckedAt=new Date().toISOString();
+
+    if(!result?.ok){
+      throw new Error(result?.error||"Falha ao consultar a fila.");
+    }
+
+    if(!result.found){
+      generationState.lastStatus="Nenhuma solicitação de novo lote registrada.";
+      saveGenerationState();
+      setGenerationStatus(generationState.lastStatus,"");
+      return result;
+    }
+
+    const request=result.request||{};
+    generationState.lastRequestId=request.request_id||generationState.lastRequestId;
+    generationState.lastRequestVersion=request.content_version_at_request||generationState.lastRequestVersion;
+
+    const status=String(request.status||"");
+    const messages={
+      pending:`Pedido ${request.request_id} aguardando geração de ${request.requested_cards} cards.`,
+      processing:`Pedido ${request.request_id} em processamento.`,
+      published:`Novo lote publicado${request.target_content_version?` em ${request.target_content_version}`:""}. Toque em “Buscar novos cards”.`,
+      error:`A geração encontrou erro: ${request.error||"erro não detalhado"}.`
+    };
+
+    generationState.lastStatus=messages[status]||`Status da fila: ${status||"desconhecido"}.`;
+    saveGenerationState();
+    setGenerationStatus(
+      generationState.lastStatus,
+      status==="published"?"ok":status==="error"?"bad":"wait"
+    );
+
+    if(status==="published" && navigator.onLine){
+      await checkForNewCards({silent:true});
+    }
+
+    return result;
+  }catch(error){
+    console.error(error);
+    if(!silent) setGenerationStatus(error.message||String(error),"bad");
+    return null;
+  }
+}
+
+async function confirmGenerationRequest(previousRequestId=""){
+  for(let attempt=1;attempt<=7;attempt++){
+    await new Promise(resolve=>setTimeout(resolve,attempt===1?1300:900));
+    const result=await refreshGenerationStatus({silent:true});
+    const request=result?.request;
+
+    if(result?.ok && result.found && request?.request_id && request.request_id!==previousRequestId){
+      return request;
+    }
+
+    if(result?.ok && result.found && request?.content_version_at_request===CONTENT_VERSION){
+      return request;
+    }
+  }
+
+  throw new Error("O pedido foi enviado, mas ainda não apareceu na fila.");
+}
+
+async function maybeRequestGeneration({force=false,triggerType="threshold"}={}){
+  if(generationRequestInProgress) return null;
+  if(!generationState.enabled && !force) return null;
+  if(!syncConfig.endpoint || !syncConfig.token) return null;
+  if(!navigator.onLine) return null;
+
+  const remaining=remainingCardsCount();
+  const completed=CARDS.length-remaining;
+
+  if(!force && remaining>generationState.threshold){
+    setGenerationStatus(
+      `Estoque suficiente: ${remaining} cards inéditos. Novo pedido será criado quando restarem ${generationState.threshold} ou menos.`,
+      "ok"
+    );
+    return null;
+  }
+
+  generationRequestInProgress=true;
+  const button=document.getElementById("requestGenerationBtn");
+  if(button){
+    button.disabled=true;
+    button.dataset.originalText=button.textContent;
+    button.textContent="Solicitando…";
+  }
+
+  try{
+    await fetchGenerationRules();
+    const currentStatus=await refreshGenerationStatus({silent:true});
+    const currentRequest=currentStatus?.request;
+
+    if(
+      currentStatus?.found &&
+      currentRequest?.content_version_at_request===CONTENT_VERSION &&
+      ["pending","processing","published"].includes(currentRequest.status)
+    ){
+      await refreshGenerationStatus({silent:false});
+      return currentRequest;
+    }
+
+    setGenerationStatus("Enviando pedido de novo lote…","wait");
+
+    const body={
+      action:"request_generation",
+      token:syncConfig.token,
+      source:"pwa",
+      device_id:syncConfig.deviceId,
+      trigger_type:triggerType,
+      remaining_cards:remaining,
+      completed_cards:completed,
+      requested_cards:generationState.batchSize,
+      content_version_at_request:CONTENT_VERSION,
+      reason:force
+        ?"Solicitação manual pelo aplicativo."
+        :`Estoque automático atingido: ${remaining} cards restantes.`
+    };
+
+    const previousRequestId=generationState.lastRequestId;
+
+    await fetch(syncConfig.endpoint,{
+      method:"POST",
+      mode:"no-cors",
+      cache:"no-store",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify(body)
+    });
+
+    const request=await confirmGenerationRequest(previousRequestId);
+    generationState.lastRequestId=request.request_id||"";
+    generationState.lastRequestVersion=CONTENT_VERSION;
+    generationState.lastStatus=
+      `Pedido ${request.request_id} registrado para ${request.requested_cards} cards.`;
+    saveGenerationState();
+    setGenerationStatus(generationState.lastStatus,"wait");
+    return request;
+  }catch(error){
+    console.error(error);
+    setGenerationStatus(error.message||String(error),"bad");
+    return null;
+  }finally{
+    generationRequestInProgress=false;
+    if(button){
+      button.disabled=false;
+      button.textContent=button.dataset.originalText||"Solicitar lote agora";
+      delete button.dataset.originalText;
+    }
+  }
+}
 
 function tickActiveTime(){
   const now=Date.now();
@@ -980,9 +1411,7 @@ function render(){
   document.getElementById("kicker").textContent=
     `${card.disciplina} · ${card.topico} · lote ${String(card.lote||1).padStart(2,"0")} · card ${state.current+1}/${getSequence().length}`;
   document.getElementById("title").textContent=card.titulo;
-  document.getElementById("explanation").innerHTML="<b>Explicação:</b> "+card.explicacao;
-  document.getElementById("example").innerHTML="<b>Exemplo:</b> "+card.exemplo;
-  document.getElementById("trap").innerHTML="<b>Pegadinha FGV:</b> "+card.pegadinha;
+  renderContentBlocks(card);
   document.getElementById("note").value=state.notes[card.id]||"";
   document.getElementById("noteDetails").open=Boolean(state.notes[card.id]);
   renderQuestion();
@@ -1265,6 +1694,25 @@ document.getElementById("clearSyncBtn").onclick=clearSyncConfig;
 document.getElementById("checkCatalogBtn").onclick=()=>checkForNewCards({manual:true});
 document.getElementById("completionCheckBtn").onclick=()=>checkForNewCards({manual:true});
 document.getElementById("completionSyncBtn").onclick=syncNow;
+document.getElementById("generationEnabled").onchange=event=>{
+  generationState.enabled=event.target.checked;
+  saveGenerationState();
+  populateGenerationUI();
+
+  if(generationState.enabled){
+    maybeRequestGeneration({triggerType:"enabled"});
+  }
+};
+
+document.getElementById("requestGenerationBtn").onclick=()=>maybeRequestGeneration({
+  force:true,
+  triggerType:"manual"
+});
+
+document.getElementById("refreshGenerationBtn").onclick=()=>refreshGenerationStatus({
+  silent:false
+});
+
 document.getElementById("completionReviewBtn").onclick=()=>{
   state.mode="revisao";
   state.current=0;
@@ -1442,6 +1890,10 @@ function validateCardsPayload(data){
     }
     ids.add(card.id);
 
+    if(card.blocos!==undefined && !Array.isArray(card.blocos)){
+      throw new Error(`O card ${card.id} possui blocos em formato inválido.`);
+    }
+
     if(!Array.isArray(card.questoes) || card.questoes.length===0){
       throw new Error(`O card ${card.id} não possui questões.`);
     }
@@ -1493,11 +1945,15 @@ async function bootstrap(){
   try{
     await loadCards();
     populateSyncUI();
+    populateGenerationUI();
     loading.classList.add("hidden");
     render();
 
     if(syncConfig.endpoint && navigator.onLine){
-      checkForNewCards({silent:true});
+      await fetchGenerationRules();
+      await checkForNewCards({silent:true});
+      await refreshGenerationStatus({silent:true});
+      await maybeRequestGeneration({triggerType:"app_open"});
     }else{
       setCatalogStatus(
         navigator.onLine
@@ -1522,8 +1978,12 @@ async function bootstrap(){
   }
 }
 
-window.addEventListener("online",()=>{
-  if(syncConfig.endpoint) checkForNewCards({silent:true});
+window.addEventListener("online",async()=>{
+  if(syncConfig.endpoint){
+    await checkForNewCards({silent:true});
+    await refreshGenerationStatus({silent:true});
+    await maybeRequestGeneration({triggerType:"back_online"});
+  }
 });
 
 bootstrap();
