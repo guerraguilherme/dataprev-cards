@@ -12,7 +12,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 
-<title>DATAPREV Cards — MVP 04 · Lote 02</title>
+<title>DATAPREV Cards — PWA 1.4</title>
 <style>
 :root {
   --bg:#f4f6f8; --card:#ffffff; --text:#17202a; --muted:#667085;
@@ -106,6 +106,24 @@ details summary{cursor:pointer;font-weight:700}
 .sync-help{font-size:.8rem;color:var(--muted);line-height:1.4}
 .sync-actions button{flex:1;min-width:145px}
 
+
+.catalog-status{
+  margin-top:10px;padding:10px 11px;border:1px solid var(--line);
+  border-radius:11px;background:#f7f9fb;line-height:1.4
+}
+.catalog-status.ok{background:var(--okbg);border-color:#9bd7b8;color:#075c34}
+.catalog-status.bad{background:var(--badbg);border-color:#f0a8a1;color:#8e1b12}
+.catalog-status.wait{background:var(--warnbg);border-color:#ead48f;color:#5d4200}
+.catalog-grid{display:grid;gap:9px}
+.completion{
+  text-align:center;padding:20px 16px
+}
+.completion-icon{font-size:2.3rem;line-height:1}
+.completion h1{margin:8px 0 6px}
+.completion p{color:var(--muted);line-height:1.5}
+.completion .row{justify-content:center;margin-top:14px}
+.completion .row button{min-width:170px}
+
 </style>
 </head>
 <body>
@@ -113,7 +131,7 @@ details summary{cursor:pointer;font-weight:700}
   <div class="top">
     <div>
       <div class="brand">DATAPREV Cards</div>
-      <div class="small">MVP 04 · 30 cards · Lotes 01 e 02 · PWA 1.3</div>
+      <div class="small" id="contentSummary">Catálogo local · PWA 1.4</div>
     </div>
     <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <span class="badge" style="color:#0f7b45;border-color:#9bd7b8;background:#e9f8f0">Offline pronto</span>
@@ -183,9 +201,37 @@ details summary{cursor:pointer;font-weight:700}
     </div>
   </details>
 
+  <details class="panel" id="catalogPanel">
+    <summary>Conteúdo e novos lotes</summary>
+    <div class="catalog-grid" style="margin-top:12px">
+      <div class="small" id="catalogMetaText">
+        O aplicativo usa o catálogo salvo no aparelho e verifica novas publicações quando houver internet.
+      </div>
+      <div class="row">
+        <button id="checkCatalogBtn">Buscar novos cards</button>
+      </div>
+      <div class="catalog-status" id="catalogStatus">
+        Catálogo ainda não verificado nesta abertura.
+      </div>
+    </div>
+  </details>
+
   <section class="panel" id="loadingPanel">
     <b>Carregando banco de cards…</b>
     <div class="small" style="margin-top:6px">Na primeira abertura após a atualização, mantenha a internet ativa.</div>
+  </section>
+
+  <section class="panel completion hidden" id="completionPanel">
+    <div class="completion-icon">✓</div>
+    <h1>Trilha concluída</h1>
+    <p id="completionText">
+      Todos os cards disponíveis foram concluídos.
+    </p>
+    <div class="row">
+      <button id="completionSyncBtn" class="primary">Sincronizar resultado</button>
+      <button id="completionCheckBtn">Buscar novos cards</button>
+      <button id="completionReviewBtn">Entrar em revisão inteligente</button>
+    </div>
   </section>
 
   <section class="card hidden" id="studyCard">
@@ -222,10 +268,15 @@ details summary{cursor:pointer;font-weight:700}
 let CARDS = [];
 let CONTENT_VERSION = "";
 const KEY = "dataprev_cards_mvp01";
-const APP_VERSION = "1.3";
+const APP_VERSION = "1.4";
 const SYNC_CONFIG_KEY = "dataprev_cards_sync_config_v1";
+const CATALOG_DB_NAME = "dataprev_cards_catalog_db";
+const CATALOG_STORE = "catalog";
+const CATALOG_RECORD_KEY = "active";
 let syncConfig = loadSyncConfig();
 let syncInProgress = false;
+let catalogCheckInProgress = false;
+let catalogSource = "local";
 
 let state = JSON.parse(localStorage.getItem(KEY) || "null") || {
   current:0,
@@ -395,6 +446,282 @@ function jsonpRequest(endpoint,params,timeoutMs=20000){
   });
 }
 
+function openCatalogDb(){
+  return new Promise((resolve,reject)=>{
+    if(!("indexedDB" in window)){
+      reject(new Error("IndexedDB não disponível."));
+      return;
+    }
+
+    const request=indexedDB.open(CATALOG_DB_NAME,1);
+
+    request.onupgradeneeded=()=>{
+      const db=request.result;
+      if(!db.objectStoreNames.contains(CATALOG_STORE)){
+        db.createObjectStore(CATALOG_STORE);
+      }
+    };
+
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error||new Error("Falha ao abrir o catálogo local."));
+  });
+}
+
+async function catalogDbGet(){
+  const db=await openCatalogDb();
+
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(CATALOG_STORE,"readonly");
+    const request=tx.objectStore(CATALOG_STORE).get(CATALOG_RECORD_KEY);
+
+    request.onsuccess=()=>{
+      db.close();
+      resolve(request.result||null);
+    };
+    request.onerror=()=>{
+      db.close();
+      reject(request.error||new Error("Falha ao ler o catálogo local."));
+    };
+  });
+}
+
+async function catalogDbSet(payload){
+  const db=await openCatalogDb();
+
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(CATALOG_STORE,"readwrite");
+    tx.objectStore(CATALOG_STORE).put(payload,CATALOG_RECORD_KEY);
+
+    tx.oncomplete=()=>{
+      db.close();
+      resolve();
+    };
+    tx.onerror=()=>{
+      db.close();
+      reject(tx.error||new Error("Falha ao salvar o catálogo local."));
+    };
+  });
+}
+
+function setCatalogStatus(message,type=""){
+  const box=document.getElementById("catalogStatus");
+  if(!box) return;
+  box.textContent=message;
+  box.className="catalog-status"+(type?" "+type:"");
+}
+
+function updateContentSummary(){
+  const totalQuestions=CARDS.reduce((sum,card)=>sum+card.questoes.length,0);
+  const summary=document.getElementById("contentSummary");
+  const meta=document.getElementById("catalogMetaText");
+
+  if(summary){
+    summary.textContent=
+      `${CARDS.length} cards · ${totalQuestions} questões · ${CONTENT_VERSION||"sem versão"} · PWA ${APP_VERSION}`;
+  }
+
+  if(meta){
+    meta.textContent=
+      `Catálogo ativo: ${CONTENT_VERSION||"sem versão"} · `+
+      `${CARDS.length} cards · fonte ${catalogSource==="remote"?"Google Sheets":"salva no aparelho"}.`;
+  }
+}
+
+function allCardsComplete(){
+  return CARDS.length>0 && CARDS.every(isCardComplete);
+}
+
+function firstIncompleteSequencePosition(){
+  const seq=getSequence();
+
+  for(let position=0;position<seq.length;position++){
+    if(!isCardComplete(CARDS[seq[position]])) return position;
+  }
+
+  return -1;
+}
+
+function showCompletion(){
+  const study=document.getElementById("studyCard");
+  const completion=document.getElementById("completionPanel");
+  const completed=CARDS.filter(isCardComplete).length;
+  const totalQuestions=CARDS.reduce((sum,card)=>sum+card.questoes.length,0);
+
+  study.classList.add("hidden");
+  completion.classList.remove("hidden");
+  document.getElementById("completionText").textContent=
+    `${completed} de ${CARDS.length} cards e ${totalQuestions} questões disponíveis foram concluídos. `+
+    `Seu progresso está preservado. Busque novos cards ou entre na revisão inteligente.`;
+}
+
+function hideCompletion(){
+  document.getElementById("completionPanel").classList.add("hidden");
+  document.getElementById("studyCard").classList.remove("hidden");
+}
+
+async function loadBundledCatalog(){
+  const response=await fetch("./cards.json",{cache:"no-store"});
+  if(!response.ok){
+    throw new Error(`Falha ao carregar cards.json: HTTP ${response.status}.`);
+  }
+
+  const data=await response.json();
+  const cards=validateCardsPayload(data);
+
+  return {
+    schemaVersion:data.schemaVersion||1,
+    contentVersion:data.contentVersion||"conteudo-local",
+    totalCards:cards.length,
+    cards,
+    cachedAt:new Date().toISOString()
+  };
+}
+
+async function applyCatalog(payload,source){
+  const previousIds=new Set(CARDS.map(card=>card.id));
+  const previousCount=CARDS.length;
+  const cards=validateCardsPayload(payload);
+
+  CARDS=cards;
+  CONTENT_VERSION=Array.isArray(payload)
+    ?"sem versão"
+    :(payload.contentVersion||"sem versão");
+  catalogSource=source;
+
+  const newCards=CARDS.filter(card=>!previousIds.has(card.id)).length;
+  const firstIncomplete=firstIncompleteSequencePosition();
+
+  if(state.mode==="trilha"){
+    if(firstIncomplete>=0){
+      state.current=firstIncomplete;
+    }else{
+      state.current=Math.max(0,Math.min(state.current,CARDS.length-1));
+    }
+  }
+
+  migrateLegacyConfidence();
+  save();
+  updateContentSummary();
+  render();
+
+  return {
+    previousCount,
+    currentCount:CARDS.length,
+    newCards
+  };
+}
+
+async function fetchRemoteCatalog(endpoint){
+  const meta=await jsonpRequest(endpoint,{action:"catalog_meta"},25000);
+
+  if(!meta?.ok){
+    throw new Error(meta?.error||"O catálogo remoto não respondeu corretamente.");
+  }
+
+  if(!meta.found){
+    throw new Error("O serviço ainda não possui catálogo publicado.");
+  }
+
+  const cards=[];
+  const pageSize=20;
+  let page=1;
+  let totalPages=1;
+
+  do{
+    const result=await jsonpRequest(endpoint,{
+      action:"cards_page",
+      version:meta.content_version,
+      page,
+      page_size:pageSize
+    },30000);
+
+    if(!result?.ok || !result.found){
+      throw new Error(result?.error||`Não foi possível carregar a página ${page} do catálogo.`);
+    }
+
+    cards.push(...result.cards);
+    totalPages=Number(result.total_pages)||1;
+    page+=1;
+  }while(page<=totalPages);
+
+  const payload={
+    schemaVersion:1,
+    contentVersion:meta.content_version,
+    totalCards:cards.length,
+    totalQuestions:Number(meta.total_questions)||cards.reduce((s,c)=>s+c.questoes.length,0),
+    publishedAt:meta.published_at||"",
+    cards,
+    cachedAt:new Date().toISOString()
+  };
+
+  validateCardsPayload(payload);
+  return payload;
+}
+
+async function checkForNewCards({manual=false,silent=false}={}){
+  if(catalogCheckInProgress) return;
+
+  if(!syncConfig.endpoint){
+    if(manual){
+      setCatalogStatus(
+        "Configure primeiro a URL do serviço no painel de sincronização.",
+        "bad"
+      );
+    }
+    return;
+  }
+
+  catalogCheckInProgress=true;
+  const button=document.getElementById("checkCatalogBtn");
+  if(button) button.disabled=true;
+
+  try{
+    if(!silent) setCatalogStatus("Consultando o catálogo publicado…","wait");
+
+    const remote=await fetchRemoteCatalog(syncConfig.endpoint);
+    const sameVersion=remote.contentVersion===CONTENT_VERSION;
+    const sameCount=remote.cards.length===CARDS.length;
+
+    if(sameVersion && sameCount){
+      catalogSource="remote";
+      await catalogDbSet(remote);
+      updateContentSummary();
+
+      if(!silent){
+        setCatalogStatus(
+          `Catálogo atualizado. Nenhum card novo: ${CARDS.length} cards disponíveis.`,
+          "ok"
+        );
+      }
+      return {updated:false,newCards:0};
+    }
+
+    await catalogDbSet(remote);
+    const applied=await applyCatalog(remote,"remote");
+
+    setCatalogStatus(
+      applied.newCards>0
+        ? `${applied.newCards} novo(s) card(s) carregado(s). Total atual: ${applied.currentCount}.`
+        : `Catálogo atualizado para ${remote.contentVersion}.`,
+      "ok"
+    );
+
+    return {updated:true,newCards:applied.newCards};
+  }catch(error){
+    console.error(error);
+    if(!silent){
+      setCatalogStatus(
+        `Não foi possível atualizar agora. O catálogo salvo continua disponível. ${error.message}`,
+        "bad"
+      );
+    }
+    return {updated:false,error};
+  }finally{
+    catalogCheckInProgress=false;
+    if(button) button.disabled=false;
+  }
+}
+
 async function checksumText(text){
   if(window.crypto && window.crypto.subtle && window.TextEncoder){
     const bytes=new TextEncoder().encode(text);
@@ -511,6 +838,8 @@ async function syncNow(){
       " bloco(s), "+new Date(syncConfig.lastSyncAt).toLocaleString("pt-BR")+".",
       "ok"
     );
+
+    await checkForNewCards({silent:true});
   }catch(error){
     console.error(error);
     setSyncStatus(error.message||String(error),"bad");
@@ -614,8 +943,19 @@ function isCardComplete(card){
 }
 
 function render(){
-  const card=currentCard();
   document.getElementById("mode").value=state.mode;
+  updateContentSummary();
+  updateStats();
+  updateTimeUI();
+
+  if(state.mode==="trilha" && allCardsComplete()){
+    document.getElementById("modeBadge").textContent="Trilha concluída";
+    showCompletion();
+    return;
+  }
+
+  hideCompletion();
+  const card=currentCard();
   document.getElementById("modeBadge").textContent={
     trilha:"Trilha",revisao:"Revisão",rapida:"Sessão rápida",resgate:"Resgate"
   }[state.mode];
@@ -628,8 +968,6 @@ function render(){
   document.getElementById("note").value=state.notes[card.id]||"";
   document.getElementById("noteDetails").open=Boolean(state.notes[card.id]);
   renderQuestion();
-  updateStats();
-  updateTimeUI();
 }
 
 function renderQuestion(){
@@ -789,14 +1127,40 @@ function focusQuestion(){
 
 function moveCard(delta,force=false){
   const card=currentCard();
+
   if(delta>0 && !force && !isCardComplete(card)){
     currentQuestion=firstUnanswered(card);
     renderQuestion();
     focusQuestion();
     return alert("Conclua as questões pendentes antes de avançar para o próximo card.");
   }
+
   const seq=getSequence();
-  state.current=(state.current+delta+seq.length)%seq.length;
+
+  if(delta>0 && state.current>=seq.length-1){
+    if(state.mode==="trilha" && allCardsComplete()){
+      save();
+      render();
+      requestAnimationFrame(()=>{
+        document.getElementById("completionPanel")
+          .scrollIntoView({behavior:"smooth",block:"start"});
+      });
+      return;
+    }
+
+    const pending=firstIncompleteSequencePosition();
+
+    if(state.mode==="trilha" && pending>=0){
+      state.current=pending;
+    }else{
+      state.current=0;
+    }
+  }else if(delta<0 && state.current<=0){
+    state.current=seq.length-1;
+  }else{
+    state.current=Math.max(0,Math.min(state.current+delta,seq.length-1));
+  }
+
   currentQuestion=0;
   save();
   render();
@@ -880,6 +1244,17 @@ document.getElementById("saveSyncBtn").onclick=async()=>{
 
 document.getElementById("syncNowBtn").onclick=syncNow;
 document.getElementById("clearSyncBtn").onclick=clearSyncConfig;
+document.getElementById("checkCatalogBtn").onclick=()=>checkForNewCards({manual:true});
+document.getElementById("completionCheckBtn").onclick=()=>checkForNewCards({manual:true});
+document.getElementById("completionSyncBtn").onclick=syncNow;
+document.getElementById("completionReviewBtn").onclick=()=>{
+  state.mode="revisao";
+  state.current=0;
+  currentQuestion=0;
+  save();
+  render();
+  focusCardTop();
+};
 
 document.getElementById("resetBtn").onclick=()=>{
   if(confirm("Apagar todo o progresso deste MVP?")){
@@ -991,7 +1366,7 @@ document.getElementById("reportBtn").onclick=()=>{
 
 document.getElementById("closeReport").onclick=()=>{
   document.getElementById("reportPanel").classList.add("hidden");
-  document.getElementById("studyCard").classList.remove("hidden");
+  render();
 };
 
 document.getElementById("copyReport").onclick=async()=>{
@@ -1067,27 +1442,52 @@ function validateCardsPayload(data){
 }
 
 async function loadCards(){
-  const response=await fetch("./cards.json",{cache:"no-store"});
-  if(!response.ok){
-    throw new Error(`Falha ao carregar cards.json: HTTP ${response.status}.`);
+  let cached=null;
+
+  try{
+    cached=await catalogDbGet();
+  }catch(error){
+    console.warn("Catálogo em IndexedDB indisponível:",error);
   }
-  const data=await response.json();
-  CARDS=validateCardsPayload(data);
-  CONTENT_VERSION=Array.isArray(data)?"sem versão":(data.contentVersion||"sem versão");
+
+  if(cached){
+    try{
+      await applyCatalog(cached,"cache");
+      return;
+    }catch(error){
+      console.warn("Catálogo salvo inválido; usando pacote local.",error);
+    }
+  }
+
+  const bundled=await loadBundledCatalog();
+  await applyCatalog(bundled,"local");
+
+  try{
+    await catalogDbSet(bundled);
+  }catch(error){
+    console.warn("Não foi possível salvar o catálogo inicial:",error);
+  }
 }
 
 async function bootstrap(){
   const loading=document.getElementById("loadingPanel");
-  const study=document.getElementById("studyCard");
 
   try{
     await loadCards();
-    migrateLegacyConfidence();
-    save();
-    loading.classList.add("hidden");
-    study.classList.remove("hidden");
-    render();
     populateSyncUI();
+    loading.classList.add("hidden");
+    render();
+
+    if(syncConfig.endpoint && navigator.onLine){
+      checkForNewCards({silent:true});
+    }else{
+      setCatalogStatus(
+        navigator.onLine
+          ?"Catálogo salvo carregado. Configure o serviço para buscar novos lotes."
+          :"Modo offline: usando o catálogo salvo no aparelho.",
+        ""
+      );
+    }
   }catch(error){
     console.error(error);
     loading.innerHTML=`
@@ -1103,6 +1503,10 @@ async function bootstrap(){
     };
   }
 }
+
+window.addEventListener("online",()=>{
+  if(syncConfig.endpoint) checkForNewCards({silent:true});
+});
 
 bootstrap();
 </script>

@@ -1,4 +1,4 @@
-const CACHE_NAME = "dataprev-cards-v4";
+const CACHE_NAME = "dataprev-cards-v5";
 const APP_SHELL = [
   "./",
   "./index.html",
