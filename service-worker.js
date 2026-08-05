@@ -1,7 +1,8 @@
-const CACHE_NAME = "dataprev-cards-v2";
+const CACHE_NAME = "dataprev-cards-v3";
 const APP_SHELL = [
   "./",
   "./index.html",
+  "./cards.json",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -27,6 +28,28 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
+
+  const url = new URL(event.request.url);
+  const isCardsFile = url.pathname.endsWith("/cards.json");
+
+  if (isCardsFile) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          if (!response || !response.ok) throw new Error("Resposta de rede inválida.");
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+          return response;
+        })
+        .catch(() =>
+          caches.match(event.request).then(cached => {
+            if (cached) return cached;
+            throw new Error("cards.json indisponível na rede e no cache.");
+          })
+        )
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then(cached => {
