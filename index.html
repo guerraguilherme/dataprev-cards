@@ -12,7 +12,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 
-<title>DATAPREV Cards — PWA 1.4</title>
+<title>DATAPREV Cards — PWA 1.4.1</title>
 <style>
 :root {
   --bg:#f4f6f8; --card:#ffffff; --text:#17202a; --muted:#667085;
@@ -210,7 +210,7 @@ details summary{cursor:pointer;font-weight:700}
       <div class="row">
         <button id="checkCatalogBtn">Buscar novos cards</button>
       </div>
-      <div class="catalog-status" id="catalogStatus">
+      <div class="catalog-status" id="catalogStatus" role="status" aria-live="polite">
         Catálogo ainda não verificado nesta abertura.
       </div>
     </div>
@@ -231,6 +231,10 @@ details summary{cursor:pointer;font-weight:700}
       <button id="completionSyncBtn" class="primary">Sincronizar resultado</button>
       <button id="completionCheckBtn">Buscar novos cards</button>
       <button id="completionReviewBtn">Entrar em revisão inteligente</button>
+    </div>
+    <div class="catalog-status" id="completionCatalogStatus"
+      role="status" aria-live="polite" style="margin-top:14px">
+      Toque em “Buscar novos cards” para verificar novas publicações.
     </div>
   </section>
 
@@ -268,7 +272,7 @@ details summary{cursor:pointer;font-weight:700}
 let CARDS = [];
 let CONTENT_VERSION = "";
 const KEY = "dataprev_cards_mvp01";
-const APP_VERSION = "1.4";
+const APP_VERSION = "1.4.1";
 const SYNC_CONFIG_KEY = "dataprev_cards_sync_config_v1";
 const CATALOG_DB_NAME = "dataprev_cards_catalog_db";
 const CATALOG_STORE = "catalog";
@@ -504,10 +508,12 @@ async function catalogDbSet(payload){
 }
 
 function setCatalogStatus(message,type=""){
-  const box=document.getElementById("catalogStatus");
-  if(!box) return;
-  box.textContent=message;
-  box.className="catalog-status"+(type?" "+type:"");
+  ["catalogStatus","completionCatalogStatus"].forEach(id=>{
+    const box=document.getElementById(id);
+    if(!box) return;
+    box.textContent=message;
+    box.className="catalog-status"+(type?" "+type:"");
+  });
 }
 
 function updateContentSummary(){
@@ -672,8 +678,16 @@ async function checkForNewCards({manual=false,silent=false}={}){
   }
 
   catalogCheckInProgress=true;
-  const button=document.getElementById("checkCatalogBtn");
-  if(button) button.disabled=true;
+  const buttons=[
+    document.getElementById("checkCatalogBtn"),
+    document.getElementById("completionCheckBtn")
+  ].filter(Boolean);
+
+  buttons.forEach(button=>{
+    button.disabled=true;
+    button.dataset.originalText=button.textContent;
+    button.textContent="Buscando…";
+  });
 
   try{
     if(!silent) setCatalogStatus("Consultando o catálogo publicado…","wait");
@@ -718,7 +732,11 @@ async function checkForNewCards({manual=false,silent=false}={}){
     return {updated:false,error};
   }finally{
     catalogCheckInProgress=false;
-    if(button) button.disabled=false;
+    buttons.forEach(button=>{
+      button.disabled=false;
+      button.textContent=button.dataset.originalText||"Buscar novos cards";
+      delete button.dataset.originalText;
+    });
   }
 }
 
