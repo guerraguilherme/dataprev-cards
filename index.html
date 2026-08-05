@@ -94,6 +94,18 @@ details summary{cursor:pointer;font-weight:700}
   .stats{grid-template-columns:1fr 1fr}
   .app{padding:10px 10px calc(200px + env(safe-area-inset-bottom) + var(--viewport-cover, 0px))}
 }
+
+.sync-status{
+  margin-top:10px;padding:10px 11px;border:1px solid var(--line);
+  border-radius:11px;background:#f7f9fb;line-height:1.4
+}
+.sync-status.ok{background:var(--okbg);border-color:#9bd7b8;color:#075c34}
+.sync-status.bad{background:var(--badbg);border-color:#f0a8a1;color:#8e1b12}
+.sync-status.wait{background:var(--warnbg);border-color:#ead48f;color:#5d4200}
+.sync-grid{display:grid;grid-template-columns:1fr;gap:9px;margin-top:10px}
+.sync-help{font-size:.8rem;color:var(--muted);line-height:1.4}
+.sync-actions button{flex:1;min-width:145px}
+
 </style>
 </head>
 <body>
@@ -101,10 +113,11 @@ details summary{cursor:pointer;font-weight:700}
   <div class="top">
     <div>
       <div class="brand">DATAPREV Cards</div>
-      <div class="small">MVP 04 · 30 cards · Lotes 01 e 02 · PWA 1.2</div>
+      <div class="small">MVP 04 · 30 cards · Lotes 01 e 02 · PWA 1.3</div>
     </div>
     <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <span class="badge" style="color:#0f7b45;border-color:#9bd7b8;background:#e9f8f0">Offline pronto</span>
+      <span class="badge" id="syncBadge">Sync não configurada</span>
       <span class="badge" id="modeBadge">Trilha</span>
     </div>
   </div>
@@ -138,6 +151,35 @@ details summary{cursor:pointer;font-weight:700}
         <button id="resetBtn" class="danger">Reiniciar</button>
       </div>
       <input id="fileInput" type="file" accept=".json" class="hidden">
+    </div>
+  </details>
+
+  <details class="panel" id="syncPanel">
+    <summary>Sincronização com Google Sheets</summary>
+    <div class="sync-grid">
+      <div class="sync-help">
+        O endereço e a chave ficam somente neste aparelho, fora do checkpoint e do GitHub.
+      </div>
+
+      <label class="small" for="syncEndpoint">URL do Web App terminada em /exec</label>
+      <input id="syncEndpoint" type="url" inputmode="url" autocomplete="off"
+        placeholder="https://script.google.com/macros/s/.../exec">
+
+      <label class="small" for="syncToken">Chave privada de sincronização</label>
+      <input id="syncToken" type="password" autocomplete="off"
+        placeholder="Cole a chave criada pelo setupSync">
+
+      <div class="small" id="syncDeviceText"></div>
+
+      <div class="row sync-actions">
+        <button id="saveSyncBtn">Salvar e testar</button>
+        <button id="syncNowBtn" class="primary">Sincronizar agora</button>
+        <button id="clearSyncBtn" class="danger">Apagar configuração</button>
+      </div>
+
+      <div class="sync-status" id="syncStatus">
+        Sincronização ainda não configurada.
+      </div>
     </div>
   </details>
 
@@ -180,6 +222,10 @@ details summary{cursor:pointer;font-weight:700}
 let CARDS = [];
 let CONTENT_VERSION = "";
 const KEY = "dataprev_cards_mvp01";
+const APP_VERSION = "1.3";
+const SYNC_CONFIG_KEY = "dataprev_cards_sync_config_v1";
+let syncConfig = loadSyncConfig();
+let syncInProgress = false;
 
 let state = JSON.parse(localStorage.getItem(KEY) || "null") || {
   current:0,
@@ -213,7 +259,277 @@ let currentQuestion=0;
 let selected=null;
 let saveCounter=0;
 
+
 function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+
+function createDeviceId(){
+  if(window.crypto && typeof window.crypto.randomUUID==="function"){
+    return "iphone-"+window.crypto.randomUUID();
+  }
+  return "iphone-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,12);
+}
+
+function loadSyncConfig(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(SYNC_CONFIG_KEY)||"null")||{};
+    return {
+      endpoint:String(saved.endpoint||""),
+      token:String(saved.token||""),
+      deviceId:String(saved.deviceId||createDeviceId()),
+      lastSyncAt:String(saved.lastSyncAt||""),
+      lastChecksum:String(saved.lastChecksum||"")
+    };
+  }catch{
+    return {
+      endpoint:"",
+      token:"",
+      deviceId:createDeviceId(),
+      lastSyncAt:"",
+      lastChecksum:""
+    };
+  }
+}
+
+function saveSyncConfig(){
+  localStorage.setItem(SYNC_CONFIG_KEY,JSON.stringify(syncConfig));
+}
+
+function normalizeEndpoint(value){
+  const trimmed=String(value||"").trim();
+  if(!trimmed) return "";
+  const url=new URL(trimmed);
+  if(url.protocol!=="https:") throw new Error("A URL precisa usar HTTPS.");
+  if(!url.pathname.endsWith("/exec")) throw new Error("Use a URL publicada terminada em /exec.");
+  url.search="";
+  url.hash="";
+  return url.toString();
+}
+
+function setSyncStatus(message,type=""){
+  const box=document.getElementById("syncStatus");
+  if(box){
+    box.textContent=message;
+    box.className="sync-status"+(type?" "+type:"");
+  }
+
+  const badge=document.getElementById("syncBadge");
+  if(!badge) return;
+
+  if(type==="ok"){
+    badge.textContent="Sincronizado";
+    badge.style.color="#0f7b45";
+    badge.style.borderColor="#9bd7b8";
+    badge.style.background="#e9f8f0";
+  }else if(type==="wait"){
+    badge.textContent="Sincronizando";
+    badge.style.color="#8a5b00";
+    badge.style.borderColor="#ead48f";
+    badge.style.background="#fff7df";
+  }else if(type==="bad"){
+    badge.textContent="Erro de sync";
+    badge.style.color="#b42318";
+    badge.style.borderColor="#f0a8a1";
+    badge.style.background="#fff0ee";
+  }else{
+    badge.textContent="Sync não configurada";
+    badge.removeAttribute("style");
+  }
+}
+
+function populateSyncUI(){
+  const endpoint=document.getElementById("syncEndpoint");
+  const token=document.getElementById("syncToken");
+  const device=document.getElementById("syncDeviceText");
+
+  if(endpoint) endpoint.value=syncConfig.endpoint;
+  if(token) token.value=syncConfig.token;
+  if(device) device.textContent="Aparelho: "+syncConfig.deviceId;
+
+  if(syncConfig.endpoint && syncConfig.token){
+    const suffix=syncConfig.lastSyncAt
+      ? " Última confirmação: "+new Date(syncConfig.lastSyncAt).toLocaleString("pt-BR")+"."
+      : "";
+    setSyncStatus("Configuração salva."+suffix,syncConfig.lastSyncAt?"ok":"");
+  }else{
+    setSyncStatus("Sincronização ainda não configurada.");
+  }
+}
+
+function jsonpRequest(endpoint,params,timeoutMs=20000){
+  return new Promise((resolve,reject)=>{
+    const callback="__dpSync_"+Date.now()+"_"+Math.random().toString(36).slice(2,10);
+    const script=document.createElement("script");
+    let finished=false;
+
+    const cleanup=()=>{
+      if(finished) return;
+      finished=true;
+      clearTimeout(timer);
+      try{delete window[callback]}catch{}
+      script.remove();
+    };
+
+    window[callback]=data=>{
+      cleanup();
+      resolve(data);
+    };
+
+    const url=new URL(endpoint);
+    Object.entries({...params,callback}).forEach(([key,value])=>{
+      url.searchParams.set(key,String(value));
+    });
+
+    script.src=url.toString();
+    script.async=true;
+    script.onerror=()=>{
+      cleanup();
+      reject(new Error("Não foi possível consultar o serviço de sincronização."));
+    };
+
+    const timer=setTimeout(()=>{
+      cleanup();
+      reject(new Error("O serviço demorou demais para responder."));
+    },timeoutMs);
+
+    document.head.appendChild(script);
+  });
+}
+
+async function checksumText(text){
+  if(window.crypto && window.crypto.subtle && window.TextEncoder){
+    const bytes=new TextEncoder().encode(text);
+    const hash=await window.crypto.subtle.digest("SHA-256",bytes);
+    return Array.from(new Uint8Array(hash))
+      .map(b=>b.toString(16).padStart(2,"0"))
+      .join("");
+  }
+
+  let hash=2166136261;
+  for(let i=0;i<text.length;i++){
+    hash^=text.charCodeAt(i);
+    hash=Math.imul(hash,16777619);
+  }
+  return "fnv1a-"+(hash>>>0).toString(16).padStart(8,"0");
+}
+
+function readSyncInputs(){
+  const endpoint=normalizeEndpoint(document.getElementById("syncEndpoint").value);
+  const token=String(document.getElementById("syncToken").value||"").trim();
+
+  if(!token) throw new Error("Informe a chave privada de sincronização.");
+
+  syncConfig.endpoint=endpoint;
+  syncConfig.token=token;
+  saveSyncConfig();
+}
+
+async function testSyncConnection(){
+  readSyncInputs();
+  setSyncStatus("Testando autorização…","wait");
+
+  const result=await jsonpRequest(syncConfig.endpoint,{
+    action:"status",
+    token:syncConfig.token
+  });
+
+  if(!result || result.ok!==true){
+    throw new Error(result?.error||"O serviço recusou a configuração.");
+  }
+
+  setSyncStatus("Conexão autorizada. Agora toque em “Sincronizar agora”.","ok");
+  return result;
+}
+
+async function confirmState(checksum){
+  let lastResult=null;
+
+  for(let attempt=1;attempt<=7;attempt++){
+    await new Promise(resolve=>setTimeout(resolve,attempt===1?1400:900));
+
+    lastResult=await jsonpRequest(syncConfig.endpoint,{
+      action:"state_meta",
+      token:syncConfig.token,
+      device_id:syncConfig.deviceId
+    });
+
+    if(lastResult?.ok && lastResult?.found && lastResult?.checksum===checksum){
+      return lastResult;
+    }
+  }
+
+  if(lastResult?.ok===false){
+    throw new Error(lastResult.error||"A confirmação da gravação falhou.");
+  }
+
+  throw new Error("O envio foi feito, mas a planilha ainda não confirmou o mesmo checksum.");
+}
+
+async function syncNow(){
+  if(syncInProgress) return;
+
+  try{
+    syncInProgress=true;
+    document.getElementById("syncNowBtn").disabled=true;
+    readSyncInputs();
+    tickActiveTime();
+    save();
+
+    setSyncStatus("Preparando checkpoint…","wait");
+
+    const stateJson=JSON.stringify(state);
+    const checksum=await checksumText(stateJson);
+
+    const body={
+      action:"push_state",
+      token:syncConfig.token,
+      device_id:syncConfig.deviceId,
+      app_version:APP_VERSION,
+      content_version:CONTENT_VERSION,
+      checksum,
+      state_json:stateJson
+    };
+
+    setSyncStatus("Enviando checkpoint para o Google Sheets…","wait");
+
+    await fetch(syncConfig.endpoint,{
+      method:"POST",
+      mode:"no-cors",
+      cache:"no-store",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify(body)
+    });
+
+    setSyncStatus("Envio concluído. Confirmando na planilha…","wait");
+    const confirmation=await confirmState(checksum);
+
+    syncConfig.lastSyncAt=confirmation.updated_at||new Date().toISOString();
+    syncConfig.lastChecksum=checksum;
+    saveSyncConfig();
+
+    setSyncStatus(
+      "Sincronização confirmada: "+confirmation.chunks_found+
+      " bloco(s), "+new Date(syncConfig.lastSyncAt).toLocaleString("pt-BR")+".",
+      "ok"
+    );
+  }catch(error){
+    console.error(error);
+    setSyncStatus(error.message||String(error),"bad");
+  }finally{
+    syncInProgress=false;
+    document.getElementById("syncNowBtn").disabled=false;
+  }
+}
+
+function clearSyncConfig(){
+  if(!confirm("Apagar deste iPhone a URL e a chave de sincronização? O progresso dos cards será mantido.")){
+    return;
+  }
+
+  localStorage.removeItem(SYNC_CONFIG_KEY);
+  syncConfig=loadSyncConfig();
+  populateSyncUI();
+}
+
 
 function tickActiveTime(){
   const now=Date.now();
@@ -552,6 +868,19 @@ document.getElementById("fileInput").onchange=e=>{
   r.readAsText(f);
 };
 
+
+document.getElementById("saveSyncBtn").onclick=async()=>{
+  try{
+    await testSyncConnection();
+  }catch(error){
+    console.error(error);
+    setSyncStatus(error.message||String(error),"bad");
+  }
+};
+
+document.getElementById("syncNowBtn").onclick=syncNow;
+document.getElementById("clearSyncBtn").onclick=clearSyncConfig;
+
 document.getElementById("resetBtn").onclick=()=>{
   if(confirm("Apagar todo o progresso deste MVP?")){
     localStorage.removeItem(KEY);
@@ -758,6 +1087,7 @@ async function bootstrap(){
     loading.classList.add("hidden");
     study.classList.remove("hidden");
     render();
+    populateSyncUI();
   }catch(error){
     console.error(error);
     loading.innerHTML=`

@@ -1,4 +1,4 @@
-const CACHE_NAME = "dataprev-cards-v3";
+const CACHE_NAME = "dataprev-cards-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -30,6 +30,11 @@ self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
 
   const url = new URL(event.request.url);
+
+  // Requisições do Apps Script devem passar direto pelo navegador.
+  // Isso evita cachear URLs externas que contenham a chave de sincronização.
+  if (url.origin !== self.location.origin) return;
+
   const isCardsFile = url.pathname.endsWith("/cards.json");
 
   if (isCardsFile) {
