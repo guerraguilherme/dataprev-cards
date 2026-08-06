@@ -1,4 +1,4 @@
-const CACHE_NAME = "dataprev-sessoes-v12";
+const CACHE_NAME = "dataprev-sessoes-v13";
 const OLD_CACHE_PREFIX = "dataprev-sessoes-";
 const CORE = [
   "./sessions.json",
@@ -70,6 +70,12 @@ self.addEventListener("fetch", event => {
   const url=new URL(event.request.url);
   if(url.origin!==self.location.origin)return;
   if(url.pathname.endsWith("/sessoes/service-worker.js"))return;
+
+  // A página de atualização precisa chegar sem injeções do app antigo.
+  if(url.pathname.endsWith("/sessoes/atualizar-040.html")){
+    event.respondWith(fetch(event.request,{cache:"no-store"}));
+    return;
+  }
 
   if(event.request.mode==="navigate"){
     event.respondWith((async()=>{
