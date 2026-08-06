@@ -1,0 +1,57 @@
+name: Update DATAPREV Sessions link
+
+on:
+  push:
+    paths:
+      - '.github/workflows/update-sessions-link.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace obsolete Sessions runtime links
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          old_full='https://guerraguilherme.github.io/dataprev-cards/sessoes/'
+          old_alt='https://guerraguilherme.github.io/dataprev-cards/sessoes-v04/'
+          new='https://guerraguilherme.github.io/dataprev-sessoes/'
+          changed=[]
+          for path in Path('.').iterdir():
+            if not path.is_file() or path.suffix.lower() not in {'.html','.js','.json','.webmanifest'}:
+              continue
+            text=path.read_text(encoding='utf-8')
+            updated=text.replace(old_full,new).replace(old_alt,new)
+            if updated!=text:
+              path.write_text(updated,encoding='utf-8')
+              changed.append(str(path))
+          runtime=[]
+          for path in Path('.').iterdir():
+            if path.is_file() and path.suffix.lower() in {'.html','.js','.json','.webmanifest'}:
+              text=path.read_text(encoding='utf-8')
+              if 'github.io/dataprev-cards/sessoes' in text or 'sessoes-v04' in text:
+                runtime.append(str(path))
+          report=['# DATAPREV Cards path audit','','Date: 2026-08-06','','Updated files:']
+          report += [f'- {x}' for x in changed] or ['- No runtime file required replacement.']
+          report += ['','Remaining obsolete runtime references:']
+          report += [f'- {x}' for x in runtime] or ['- None.']
+          Path('SESSIONS_PATH_AUDIT.md').write_text('\n'.join(report)+'\n',encoding='utf-8')
+          if runtime:
+            raise SystemExit('Obsolete Sessions runtime link remains: '+', '.join(runtime))
+          PY
+      - name: Commit link and audit updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add . ':!sessoes/**'
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Point Cards runtime to standalone DATAPREV Sessions [skip ci]"
+            git push
+          fi
