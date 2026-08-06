@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1647d8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="DATAPREV Sessões">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<title>DATAPREV Sessões — PWA 0.1</title>
+<style>
+:root{
+  --bg:#f3f6fb;--card:#fff;--text:#162033;--muted:#68758d;--line:#d7deea;
+  --accent:#155eef;--accent2:#e9f0ff;--ok:#087443;--okbg:#e9f8f0;
+  --bad:#b42318;--badbg:#fff0ee;--warn:#7a5200;--warnbg:#fff7df;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+.app{max-width:780px;margin:0 auto;padding:12px 12px calc(90px + env(safe-area-inset-bottom))}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin:6px 0 12px}
+.brand{font-size:1.35rem;font-weight:850}
+.sub{color:var(--muted);font-size:.9rem;line-height:1.4}
+.badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.badge{border:1px solid var(--line);border-radius:999px;padding:6px 9px;font-size:.78rem;color:var(--muted);background:#fff}
+.badge.ok{background:var(--okbg);border-color:#9bd7b8;color:var(--ok)}
+.panel,.session-card,.study-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:15px;box-shadow:0 3px 12px rgba(18,38,63,.05);margin-bottom:12px}
+.progress{height:10px;background:#e7ebf2;border-radius:999px;overflow:hidden}
+.progress>div{height:100%;background:var(--accent);width:0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.stat{background:#f7f9fc;border:1px solid var(--line);border-radius:13px;padding:10px;text-align:center}
+.stat b{display:block;font-size:1.15rem}.stat span{font-size:.78rem;color:var(--muted)}
+button,input,textarea,select{font:inherit}
+button{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:13px;padding:11px 14px;font-weight:750;touch-action:manipulation}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.ghost{background:var(--accent2);color:#123b8f;border-color:#bdd0ff}
+button.danger{color:var(--bad);border-color:#f1b4ae}
+button:disabled{opacity:.48}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row button{flex:1;min-width:145px}
+details summary{font-weight:800;cursor:pointer}
+input,textarea,select{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px;background:#fff;color:var(--text)}
+textarea{min-height:84px;resize:vertical}
+.hidden{display:none!important}
+.kicker{font-size:.77rem;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);font-weight:850}
+h1{font-size:1.55rem;line-height:1.15;margin:7px 0 12px}
+h2{font-size:1.18rem;margin:14px 0 8px}
+h3{font-size:1rem;margin:0 0 7px}
+.info{border-radius:13px;padding:12px;margin:9px 0;line-height:1.55}
+.info.concept{background:#f5f7fb;border:1px solid var(--line)}
+.info.example{background:#eef6ff;border:1px solid #b9d7ff}
+.info.connection{background:#f5f1ff;border:1px solid #d8c8ff}
+.info.trap{background:var(--warnbg);border:1px solid #ead48f;color:#4a3300}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101828;color:#f8fafc;padding:13px;border-radius:12px;overflow:auto;font-size:.9rem}
+.exercise{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
+.alt{display:block;width:100%;text-align:left;margin:7px 0;background:#fff}
+.alt.selected{background:var(--accent2);border-color:var(--accent)}
+.alt.correct{background:var(--okbg);border-color:#78c99f}
+.alt.wrong{background:var(--badbg);border-color:#efa59e}
+.feedback{padding:11px 12px;border-radius:12px;margin-top:10px;line-height:1.45}
+.feedback.ok{background:var(--okbg);color:#075c34}
+.feedback.bad{background:var(--badbg);color:#8e1b12}
+.feedback.wait{background:var(--warnbg);color:#5d4200}
+.note{margin-top:12px;border:1px solid var(--line);border-radius:13px;padding:11px;background:#f8fafc}
+.note summary{font-weight:750}
+.confidence{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:9px 0}
+.confidence button.active{background:var(--accent2);border-color:var(--accent);color:#123b8f}
+.session-meta{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0}
+.pill{font-size:.78rem;border:1px solid var(--line);border-radius:999px;padding:5px 8px;color:var(--muted)}
+.report-text{width:100%;min-height:420px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem}
+.sync-status{margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#f7f9fb;line-height:1.4}
+.sync-status.ok{background:var(--okbg);color:#075c34;border-color:#9bd7b8}
+.sync-status.bad{background:var(--badbg);color:#8e1b12;border-color:#f0a8a1}
+a{color:var(--accent);font-weight:700;text-decoration:none}
+.small{font-size:.82rem;color:var(--muted)}
+@media(max-width:580px){.stats{grid-template-columns:1fr 1fr}.top{align-items:flex-start}.brand{font-size:1.25rem}.app{padding:10px 10px calc(90px + env(safe-area-inset-bottom))}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div>
+      <div class="brand">DATAPREV Sessões</div>
+      <div class="sub" id="contentSummary">Estudo guiado · PWA 0.1</div>
+    </div>
+    <div class="badges">
+      <span class="badge ok">Offline pronto</span>
+      <span class="badge" id="syncBadge">Sync local</span>
+      <span class="badge" id="phaseBadge">Início</span>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="small" id="progressText">Nenhuma sessão iniciada</div>
+    <div class="progress" style="margin-top:8px"><div id="progressBar"></div></div>
+    <div class="stats">
+      <div class="stat"><b id="conceptStat">0/0</b><span>conceitos</span></div>
+      <div class="stat"><b id="immediateStat">0</b><span>fixações</span></div>
+      <div class="stat"><b id="finalStat">0</b><span>questões finais</span></div>
+      <div class="stat"><b id="timeStat">00:00</b><span>tempo ativo</span></div>
+    </div>
+  </section>
+
+  <details class="panel">
+    <summary>Controles e checkpoint</summary>
+    <div class="row" style="margin-top:12px">
+      <button id="timerBtn">Pausar tempo</button>
+      <button id="homeBtn">Início</button>
+      <button id="reportBtn">Relatório</button>
+      <button id="resetBtn" class="danger">Reiniciar sessão</button>
+    </div>
+    <p class="small">O progresso é salvo automaticamente neste aparelho.</p>
+  </details>
+
+  <details class="panel">
+    <summary>Sincronização compartilhada</summary>
+    <div style="margin-top:12px">
+      <p class="small">O aplicativo reutiliza a URL, a chave privada e o identificador já salvos pelo DATAPREV Cards neste mesmo aparelho.</p>
+      <div class="row">
+        <button id="syncBtn" class="primary">Sincronizar agora</button>
+        <button id="refreshContentBtn">Buscar sessões</button>
+      </div>
+      <div class="sync-status" id="syncStatus" role="status" aria-live="polite">Aguardando primeira sincronização.</div>
+    </div>
+  </details>
+
+  <section id="homePanel">
+    <div class="session-card" id="sessionCard"></div>
+  </section>
+
+  <section id="studyPanel" class="study-card hidden">
+    <div class="kicker" id="studyKicker"></div>
+    <h1 id="studyTitle"></h1>
+    <div id="studyBody"></div>
+  </section>
+
+  <section id="reportPanel" class="panel hidden">
+    <h2>Relatório da sessão</h2>
+    <textarea class="report-text" id="reportText" readonly></textarea>
+    <div class="row" style="margin-top:10px">
+      <button id="copyReportBtn" class="primary">Copiar relatório</button>
+      <button id="closeReportBtn">Fechar</button>
+    </div>
+  </section>
+
+  <p class="small" style="text-align:center;margin-top:20px">
+    <a href="../">Abrir DATAPREV Cards</a>
+  </p>
+</div>
+
+<script>
+const APP_VERSION="0.1";
+const STATE_KEY="dataprev_sessoes_state_v1";
+const SYNC_KEY="dataprev_cards_sync_config_v1";
+let catalog=null;
+let session=null;
+let state=null;
+let tickHandle=null;
+
+function freshState(){
+  return {
+    sessionId:"",
+    phase:"home",
+    conceptIndex:0,
+    finalIndex:0,
+    conceptsCompleted:{},
+    immediate:{},
+    final:{},
+    notes:{},
+    startedAt:"",
+    completedAt:"",
+    activeMs:0,
+    timerRunning:false,
+    lastTick:Date.now(),
+    contentVersion:""
+  };
+}
+function loadState(){
+  try{return {...freshState(),...JSON.parse(localStorage.getItem(STATE_KEY)||"{}")};}
+  catch{return freshState();}
+}
+function saveState(){
+  state.lastTick=Date.now();
+  localStorage.setItem(STATE_KEY,JSON.stringify(state));
+}
+function loadSyncConfig(){
+  try{return JSON.parse(localStorage.getItem(SYNC_KEY)||"{}");}
+  catch{return {};}
+}
+function esc(s){
+  return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function formatTime(ms){
+  const total=Math.floor(ms/1000),m=Math.floor(total/60),s=total%60;
+  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+function updateClock(){
+  if(state.timerRunning && document.visibilityState==="visible"){
+    const now=Date.now();
+    state.activeMs+=Math.max(0,now-state.lastTick);
+    state.lastTick=now;
+    saveState();
+  }else{
+    state.lastTick=Date.now();
+  }
+  document.getElementById("timeStat").textContent=formatTime(state.activeMs);
+}
+function startTimer(){
+  if(!state.startedAt) state.startedAt=new Date().toISOString();
+  state.timerRunning=true;state.lastTick=Date.now();saveState();renderStats();
+}
+function pauseTimer(){updateClock();state.timerRunning=false;saveState();renderStats();}
+function setStatus(id,msg,type=""){
+  const el=document.getElementById(id);el.textContent=msg;el.className="sync-status"+(type?" "+type:"");
+}
+function jsonp(endpoint,params,timeout=25000){
+  return new Promise((resolve,reject)=>{
+    const cb="dpSess_"+Date.now()+"_"+Math.random().toString(36).slice(2);
+    const script=document.createElement("script");
+    const timer=setTimeout(()=>{cleanup();reject(new Error("Tempo esgotado."));},timeout);
+    function cleanup(){clearTimeout(timer);delete window[cb];script.remove();}
+    window[cb]=data=>{cleanup();data?.ok===false?reject(new Error(data.error||"Falha no serviço.")):resolve(data);};
+    const url=new URL(endpoint);
+    Object.entries({...params,callback:cb}).forEach(([k,v])=>url.searchParams.set(k,v));
+    script.src=url.toString();script.onerror=()=>{cleanup();reject(new Error("Não foi possível acessar o serviço."));};
+    document.head.appendChild(script);
+  });
+}
+async function loadBundled(){
+  const r=await fetch("./sessions.json",{cache:"no-store"});
+  if(!r.ok) throw new Error("Não foi possível carregar sessions.json.");
+  return r.json();
+}
+async function fetchRemoteCatalog(){
+  const cfg=loadSyncConfig();
+  if(!cfg.endpoint) return null;
+  const meta=await jsonp(cfg.endpoint,{action:"sessions_meta"});
+  if(!meta.found) return null;
+  let page=1,totalPages=1,sessions=[];
+  do{
+    const p=await jsonp(cfg.endpoint,{action:"sessions_page",version:meta.content_version,page,page_size:10},30000);
+    sessions.push(...(p.sessions||[]));totalPages=Number(p.total_pages)||1;page++;
+  }while(page<=totalPages);
+  return {schemaVersion:1,contentVersion:meta.content_version,totalSessions:sessions.length,sessions};
+}
+async function loadCatalog(){
+  catalog=await loadBundled();
+  try{
+    const remote=await fetchRemoteCatalog();
+    if(remote && remote.sessions?.length) catalog=remote;
+  }catch(e){console.warn(e);}
+  session=catalog.sessions[0];
+  if(!state.sessionId) state.sessionId=session.id;
+  state.contentVersion=catalog.contentVersion;
+  saveState();
+}
+function immediateQuestions(){return session.concepts.flatMap(c=>c.immediate||[]);}
+function answeredImmediateCount(){return Object.values(state.immediate).filter(v=>v.correct).length;}
+function answeredFinalCount(){return Object.keys(state.final).length;}
+function correctFinalCount(){return Object.values(state.final).filter(v=>v.correct).length;}
+function renderStats(){
+  if(!session)return;
+  const completed=Object.keys(state.conceptsCompleted).length;
+  const immediate=answeredImmediateCount();
+  const finals=answeredFinalCount();
+  const totalSteps=session.concepts.length+session.finalQuestions.length;
+  const doneSteps=completed+finals;
+  document.getElementById("conceptStat").textContent=`${completed}/${session.concepts.length}`;
+  document.getElementById("immediateStat").textContent=immediate;
+  document.getElementById("finalStat").textContent=finals;
+  document.getElementById("timeStat").textContent=formatTime(state.activeMs);
+  document.getElementById("progressBar").style.width=`${totalSteps?100*doneSteps/totalSteps:0}%`;
+  document.getElementById("progressText").textContent=
+    state.phase==="home"?"Sessão disponível":
+    state.phase==="complete"?"Sessão concluída":
+    `${completed} conceitos e ${finals} questões finais concluídos`;
+  const phases={home:"Início",concepts:"Conceitos",final:"Questões finais",complete:"Concluída"};
+  document.getElementById("phaseBadge").textContent=phases[state.phase]||"Sessão";
+  document.getElementById("timerBtn").textContent=state.timerRunning?"Pausar tempo":"Retomar tempo";
+  document.getElementById("contentSummary").textContent=
+    `${catalog.contentVersion} · ${session.estimatedMinutes} min · PWA ${APP_VERSION}`;
+}
+function showOnly(panel){
+  ["homePanel","studyPanel","reportPanel"].forEach(id=>document.getElementById(id).classList.toggle("hidden",id!==panel));
+}
+function renderHome(){
+  showOnly("homePanel");
+  const completed=state.phase==="complete";
+  document.getElementById("sessionCard").innerHTML=`
+    <div class="kicker">${esc(session.discipline)} · ${esc(session.topic)}</div>
+    <h1>${esc(session.title)}</h1>
+    <p>${esc(session.objective)}</p>
+    <div class="session-meta">
+      <span class="pill">${session.estimatedMinutes} minutos</span>
+      <span class="pill">Prioridade ${esc(session.priority)}</span>
+      <span class="pill">${session.concepts.length} conceitos</span>
+      <span class="pill">${immediateQuestions().length} fixações</span>
+      <span class="pill">${session.finalQuestions.length} questões finais</span>
+    </div>
+    <div class="info concept"><b>Item do edital</b><br>${esc(session.itemEdital)}</div>
+    <div class="info connection"><b>Pré-requisitos relacionados</b><br>${session.prerequisites.map(esc).join(" · ")}</div>
+    <div class="row">
+      <button class="primary" id="startSessionBtn">${completed?"Rever sessão":state.startedAt?"Retomar sessão":"Iniciar sessão"}</button>
+      ${completed?'<button id="homeReportBtn">Ver relatório</button>':""}
+    </div>`;
+  document.getElementById("startSessionBtn").onclick=()=>{
+    if(completed){state.phase="concepts";state.conceptIndex=0;}
+    else if(state.phase==="home") state.phase="concepts";
+    startTimer();saveState();render();
+  };
+  if(completed)document.getElementById("homeReportBtn").onclick=showReport;
+}
+function conceptComplete(concept){return (concept.immediate||[]).every(x=>state.immediate[x.id]?.correct);}
+function renderConcept(){
+  showOnly("studyPanel");
+  const c=session.concepts[state.conceptIndex];
+  document.getElementById("studyKicker").textContent=`Conceito ${state.conceptIndex+1} de ${session.concepts.length}`;
+  document.getElementById("studyTitle").textContent=c.title;
+  let exercises=(c.immediate||[]).map((ex,i)=>{
+    const rec=state.immediate[ex.id]||{attempts:[],selected:null,correct:false};
+    const alts=ex.options.map((o,idx)=>{
+      let cls="alt";
+      if(rec.selected===idx)cls+=" selected";
+      if(rec.correct && idx===ex.answer)cls+=" correct";
+      if(rec.lastWrong===idx)cls+=" wrong";
+      return `<button class="${cls}" data-ex="${ex.id}" data-idx="${idx}" ${rec.correct?"disabled":""}>${String.fromCharCode(65+idx)}. ${esc(o)}</button>`;
+    }).join("");
+    const feedback=rec.correct?`<div class="feedback ok">Correto. ${esc(ex.explanation)}</div>`:
+      rec.lastWrong!==undefined?`<div class="feedback bad">Ainda não. ${esc(ex.explanation)} Tente novamente.</div>`:"";
+    return `<div class="exercise"><h3>Fixação imediata ${i+1}</h3><p>${esc(ex.prompt)}</p>${alts}${feedback}</div>`;
+  }).join("");
+  document.getElementById("studyBody").innerHTML=`
+    <div class="info concept"><b>O que preciso saber</b><br>${esc(c.what)}</div>
+    <div class="info concept"><b>Explicação objetiva</b><br>${esc(c.explanation)}</div>
+    <pre>${esc(c.code)}</pre>
+    <div class="info connection"><b>Conexão com o que você já estudou</b><br>${esc(c.connection)}</div>
+    <div class="info trap"><b>Pegadinha e erro comum</b><br>${esc(c.trap)}</div>
+    ${exercises}
+    <details class="note"><summary>Minha nota sobre este conceito</summary>
+      <textarea id="conceptNote" placeholder="Registre uma dúvida, regra ou exemplo...">${esc(state.notes[c.id]||"")}</textarea>
+    </details>
+    <div class="row" style="margin-top:14px">
+      <button id="prevConceptBtn" ${state.conceptIndex===0?"disabled":""}>Anterior</button>
+      <button id="nextConceptBtn" class="primary">${state.conceptIndex===session.concepts.length-1?"Ir para questões finais":"Próximo conceito"}</button>
+    </div>`;
+  document.querySelectorAll("[data-ex]").forEach(btn=>btn.onclick=()=>answerImmediate(btn.dataset.ex,Number(btn.dataset.idx)));
+  document.getElementById("conceptNote").oninput=e=>{state.notes[c.id]=e.target.value;saveState();};
+  document.getElementById("prevConceptBtn").onclick=()=>{state.conceptIndex--;saveState();render();scrollToTop();};
+  document.getElementById("nextConceptBtn").onclick=()=>{
+    if(!conceptComplete(c))return alert("Acerte a fixação imediata antes de avançar.");
+    state.conceptsCompleted[c.id]=true;
+    if(state.conceptIndex<session.concepts.length-1)state.conceptIndex++;
+    else{state.phase="final";state.finalIndex=0;}
+    saveState();render();scrollToTop();
+  };
+}
+function answerImmediate(id,idx){
+  const c=session.concepts[state.conceptIndex];
+  const ex=(c.immediate||[]).find(x=>x.id===id);
+  const rec=state.immediate[id]||{attempts:[]};
+  rec.attempts=[...(rec.attempts||[]),idx];
+  rec.selected=idx;
+  rec.answeredAt=new Date().toISOString();
+  rec.correct=idx===ex.answer;
+  if(rec.correct)delete rec.lastWrong;else rec.lastWrong=idx;
+  state.immediate[id]=rec;saveState();renderConcept();renderStats();
+}
+function renderFinal(){
+  showOnly("studyPanel");
+  const fq=session.finalQuestions[state.finalIndex];
+  const rec=state.final[fq.id]||{};
+  document.getElementById("studyKicker").textContent=`Questão final ${state.finalIndex+1} de ${session.finalQuestions.length} · ${fq.level}`;
+  document.getElementById("studyTitle").textContent="Integração e padrão FGV";
+  const options=fq.options.map((o,i)=>{
+    let cls="alt";
+    if(rec.selected===i)cls+=" selected";
+    if(rec.submitted && i===fq.answer)cls+=" correct";
+    if(rec.submitted && rec.selected===i && !rec.correct)cls+=" wrong";
+    return `<button class="${cls}" data-final-idx="${i}" ${rec.submitted?"disabled":""}>${String.fromCharCode(65+i)}. ${esc(o)}</button>`;
+  }).join("");
+  const feedback=rec.submitted?`<div class="feedback ${rec.correct?"ok":"bad"}"><b>${rec.correct?"Correto.":"Incorreto."}</b> ${esc(fq.explanation)}</div>`:"";
+  document.getElementById("studyBody").innerHTML=`
+    <div class="exercise"><p style="white-space:pre-wrap">${esc(fq.prompt)}</p>${options}</div>
+    <div class="confidence">
+      ${["baixa","media","alta"].map(v=>`<button data-confidence="${v}" class="${rec.confidence===v?"active":""}" ${rec.submitted?"disabled":""}>${v==="media"?"Média":v[0].toUpperCase()+v.slice(1)}</button>`).join("")}
+    </div>
+    <label class="small">Justificativa obrigatória</label>
+    <textarea id="finalJustification" ${rec.submitted?"disabled":""} placeholder="Explique como chegou à resposta.">${esc(rec.justification||"")}</textarea>
+    ${feedback}
+    <div class="row" style="margin-top:14px">
+      ${!rec.submitted?'<button id="submitFinalBtn" class="primary">Corrigir resposta</button>':
+      `<button id="nextFinalBtn" class="primary">${state.finalIndex===session.finalQuestions.length-1?"Concluir sessão":"Próxima questão"}</button>`}
+    </div>`;
+  document.querySelectorAll("[data-final-idx]").forEach(b=>b.onclick=()=>{rec.selected=Number(b.dataset.finalIdx);state.final[fq.id]=rec;saveState();renderFinal();});
+  document.querySelectorAll("[data-confidence]").forEach(b=>b.onclick=()=>{rec.confidence=b.dataset.confidence;state.final[fq.id]=rec;saveState();renderFinal();});
+  const ta=document.getElementById("finalJustification");
+  if(!rec.submitted)ta.oninput=e=>{rec.justification=e.target.value;state.final[fq.id]=rec;saveState();};
+  if(!rec.submitted){
+    document.getElementById("submitFinalBtn").onclick=()=>{
+      if(rec.selected===undefined)return alert("Marque uma alternativa.");
+      if(!rec.confidence)return alert("Informe sua segurança.");
+      if(!(rec.justification||"").trim())return alert("Escreva uma justificativa curta.");
+      rec.submitted=true;rec.correct=rec.selected===fq.answer;rec.answeredAt=new Date().toISOString();
+      state.final[fq.id]=rec;saveState();render();
+    };
+  }else{
+    document.getElementById("nextFinalBtn").onclick=()=>{
+      if(state.finalIndex<session.finalQuestions.length-1)state.finalIndex++;
+      else{updateClock();state.timerRunning=false;state.phase="complete";state.completedAt=new Date().toISOString();}
+      saveState();render();scrollToTop();
+    };
+  }
+}
+function renderComplete(){
+  showOnly("studyPanel");
+  document.getElementById("studyKicker").textContent="Sessão concluída";
+  document.getElementById("studyTitle").textContent=session.title;
+  const correct=correctFinalCount(),total=session.finalQuestions.length;
+  document.getElementById("studyBody").innerHTML=`
+    <div class="feedback ok"><b>${correct}/${total} questões finais corretas.</b><br>O relatório registra conceitos, tentativas de fixação, segurança, justificativas, erros e notas.</div>
+    <h2>Resumo de revisão</h2>
+    <div class="info concept">${session.reviewSummary.map(x=>`• ${esc(x)}`).join("<br>")}</div>
+    <div class="info connection"><b>Próximo passo</b><br>${esc(session.nextStep)}</div>
+    <div class="row">
+      <button id="completeReportBtn" class="primary">Abrir relatório</button>
+      <button id="completeHomeBtn">Voltar ao início</button>
+    </div>`;
+  document.getElementById("completeReportBtn").onclick=showReport;
+  document.getElementById("completeHomeBtn").onclick=()=>{state.phase="home";saveState();render();};
+}
+function report(){
+  const lines=[];
+  lines.push("DATAPREV SESSÕES — RELATÓRIO AUTOSSUFICIENTE");
+  lines.push(`Versão do conteúdo: ${catalog.contentVersion}`);
+  lines.push(`Sessão: ${session.id} — ${session.title}`);
+  lines.push(`Disciplina: ${session.discipline}`);
+  lines.push(`Item do edital: ${session.itemEdital}`);
+  lines.push(`Início: ${state.startedAt||"não registrado"}`);
+  lines.push(`Término: ${state.completedAt||"em andamento"}`);
+  lines.push(`Tempo ativo: ${formatTime(state.activeMs)}`);
+  lines.push("");
+  lines.push("CONCEITOS E FIXAÇÃO IMEDIATA");
+  session.concepts.forEach((c,ci)=>{
+    lines.push(`\n${ci+1}. ${c.title}`);
+    lines.push(`Resumo: ${c.what}`);
+    lines.push(`Nota do usuário: ${state.notes[c.id]||"—"}`);
+    (c.immediate||[]).forEach(ex=>{
+      const r=state.immediate[ex.id]||{};
+      const last=(r.attempts||[]).slice(-1)[0];
+      lines.push(`  [${ex.id}] ${ex.prompt}`);
+      lines.push(`  Resposta final: ${last===undefined?"—":ex.options[last]}`);
+      lines.push(`  Gabarito: ${ex.options[ex.answer]}`);
+      lines.push(`  Tentativas: ${(r.attempts||[]).length}`);
+      lines.push(`  Resultado: ${r.correct?"acerto":"pendente/erro"}`);
+      lines.push(`  Comentário: ${ex.explanation}`);
+    });
+  });
+  lines.push("\nQUESTÕES FINAIS");
+  session.finalQuestions.forEach((fq,i)=>{
+    const r=state.final[fq.id]||{};
+    lines.push(`\nQ${i+1} [${fq.level}] ${fq.prompt}`);
+    fq.options.forEach((o,j)=>lines.push(`  ${String.fromCharCode(65+j)}. ${o}`));
+    lines.push(`Resposta marcada: ${r.selected===undefined?"—":fq.options[r.selected]}`);
+    lines.push(`Segurança: ${r.confidence||"—"}`);
+    lines.push(`Justificativa: ${r.justification||"—"}`);
+    lines.push(`Gabarito: ${fq.options[fq.answer]}`);
+    lines.push(`Resultado: ${r.submitted?(r.correct?"acerto":"erro"):"não respondida"}`);
+    lines.push(`Comentário: ${fq.explanation}`);
+  });
+  lines.push("\nRESUMO");
+  lines.push(`Conceitos concluídos: ${Object.keys(state.conceptsCompleted).length}/${session.concepts.length}`);
+  lines.push(`Fixações corretas: ${answeredImmediateCount()}/${immediateQuestions().length}`);
+  lines.push(`Questões finais: ${correctFinalCount()}/${answeredFinalCount()} acertos`);
+  const weak=session.finalQuestions.filter(fq=>state.final[fq.id]?.submitted&&!state.final[fq.id]?.correct);
+  lines.push(`Pontos para revisão: ${weak.length?weak.map(x=>x.id).join(", "):"nenhum erro final registrado"}`);
+  lines.push(`Próximo passo: ${session.nextStep}`);
+  return lines.join("\n");
+}
+function showReport(){document.getElementById("reportText").value=report();showOnly("reportPanel");}
+function scrollToTop(){window.scrollTo({top:0,behavior:"smooth"});}
+function render(){
+  renderStats();
+  if(state.phase==="home")renderHome();
+  else if(state.phase==="concepts")renderConcept();
+  else if(state.phase==="final")renderFinal();
+  else renderComplete();
+}
+async function syncNow(){
+  const cfg=loadSyncConfig();
+  if(!cfg.endpoint||!cfg.token||!cfg.deviceId)return setStatus("syncStatus","Abra primeiro o DATAPREV Cards e mantenha a sincronização configurada.","bad");
+  setStatus("syncStatus","Enviando checkpoint da sessão…","");
+  const body={
+    action:"push_session_state",token:cfg.token,device_id:cfg.deviceId,
+    app_version:APP_VERSION,content_version:catalog.contentVersion,
+    session_id:session.id,state_json:JSON.stringify(state)
+  };
+  body.checksum=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(body.state_json)).then(buf=>Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join(""));
+  try{
+    await fetch(cfg.endpoint,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)});
+    await new Promise(r=>setTimeout(r,1200));
+    const confirmation=await jsonp(cfg.endpoint,{action:"session_state_meta",token:cfg.token,device_id:cfg.deviceId,session_id:session.id});
+    if(confirmation.checksum!==body.checksum)throw new Error("Checksum não confirmado.");
+    setStatus("syncStatus",`Sincronizado em ${new Date().toLocaleString("pt-BR")}.`,"ok");
+    document.getElementById("syncBadge").textContent="Sincronizado";
+    document.getElementById("syncBadge").classList.add("ok");
+  }catch(e){setStatus("syncStatus",`Falha: ${e.message}`,"bad");}
+}
+async function refreshContent(){
+  setStatus("syncStatus","Consultando novas sessões…","");
+  try{
+    const remote=await fetchRemoteCatalog();
+    if(!remote)return setStatus("syncStatus","Ainda não há catálogo remoto de sessões. O conteúdo local continua disponível.","bad");
+    catalog=remote;session=catalog.sessions[0];state.contentVersion=catalog.contentVersion;saveState();render();
+    setStatus("syncStatus",`Catálogo atualizado: ${catalog.totalSessions||catalog.sessions.length} sessão(ões).`,"ok");
+  }catch(e){setStatus("syncStatus",`Falha: ${e.message}`,"bad");}
+}
+document.getElementById("timerBtn").onclick=()=>state.timerRunning?pauseTimer():startTimer();
+document.getElementById("homeBtn").onclick=()=>{state.phase="home";saveState();render();scrollToTop();};
+document.getElementById("reportBtn").onclick=showReport;
+document.getElementById("closeReportBtn").onclick=render;
+document.getElementById("copyReportBtn").onclick=async()=>{
+  const text=document.getElementById("reportText").value;
+  try{await navigator.clipboard.writeText(text);alert("Relatório copiado.");}
+  catch{document.getElementById("reportText").select();document.execCommand("copy");alert("Relatório copiado.");}
+};
+document.getElementById("resetBtn").onclick=()=>{
+  if(!confirm("Apagar o progresso desta sessão neste aparelho?"))return;
+  state=freshState();state.sessionId=session.id;state.contentVersion=catalog.contentVersion;saveState();render();
+};
+document.getElementById("syncBtn").onclick=syncNow;
+document.getElementById("refreshContentBtn").onclick=refreshContent;
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")updateClock();else state.lastTick=Date.now();});
+window.addEventListener("beforeunload",updateClock);
+
+async function bootstrap(){
+  state=loadState();
+  try{
+    await loadCatalog();
+    render();
+    tickHandle=setInterval(()=>{updateClock();renderStats();},1000);
+  }catch(e){
+    document.getElementById("sessionCard").innerHTML=`<div class="feedback bad"><b>Erro ao carregar.</b><br>${esc(e.message)}</div>`;
+  }
+}
+if("serviceWorker" in navigator)navigator.serviceWorker.register("./service-worker.js").catch(console.warn);
+bootstrap();
+</script>
+</body>
+</html>
