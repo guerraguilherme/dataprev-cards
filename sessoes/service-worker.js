@@ -1,16 +1,17 @@
-const CACHE_NAME = "dataprev-sessoes-v10";
+const CACHE_NAME = "dataprev-sessoes-v11";
 const OLD_CACHE_PREFIX = "dataprev-sessoes-";
 const CORE = [
   "./sessions.json",
   "./PY-COND-R01.json",
   "./MAT-ALG-002.json",
   "./BD-NORM-002.json",
-  "./runtime-bridge.js?v=0.3.2",
-  "./catalog-loader.js?v=0.3.2",
-  "./hotfix.js?v=0.3.2",
-  "./session-ui-fix.js?v=0.3.2",
-  "./session-start-v2.js?v=0.3.2",
-  "./sync-completion-fix.js?v=0.3.2",
+  "./runtime-bridge.js?v=0.4",
+  "./catalog-loader.js?v=0.4",
+  "./hotfix.js?v=0.4",
+  "./session-ui-fix.js?v=0.4",
+  "./session-start-v2.js?v=0.4",
+  "./sync-completion-fix.js?v=0.4",
+  "./adaptive-depth.js?v=0.4",
   "./manifest.webmanifest",
   "../icons/icon-192.png",
   "../icons/icon-512.png",
@@ -38,10 +39,11 @@ async function injectScripts(response) {
     .replace(/<script src="\.\/hotfix\.js[^"]*"><\/script>/g, "")
     .replace(/<script src="\.\/session-ui-fix\.js[^"]*"><\/script>/g, "")
     .replace(/<script src="\.\/session-start-v2\.js[^"]*"><\/script>/g, "")
-    .replace(/<script src="\.\/sync-completion-fix\.js[^"]*"><\/script>/g, "");
+    .replace(/<script src="\.\/sync-completion-fix\.js[^"]*"><\/script>/g, "")
+    .replace(/<script src="\.\/adaptive-depth\.js[^"]*"><\/script>/g, "");
   const injected = cleaned.replace(
     "</body>",
-    '<script src="./runtime-bridge.js?v=0.3.2"></script><script src="./catalog-loader.js?v=0.3.2"></script><script src="./hotfix.js?v=0.3.2"></script><script src="./session-ui-fix.js?v=0.3.2"></script><script src="./session-start-v2.js?v=0.3.2"></script><script src="./sync-completion-fix.js?v=0.3.2"></script></body>'
+    '<script src="./runtime-bridge.js?v=0.4"></script><script src="./catalog-loader.js?v=0.4"></script><script src="./hotfix.js?v=0.4"></script><script src="./session-ui-fix.js?v=0.4"></script><script src="./session-start-v2.js?v=0.4"></script><script src="./sync-completion-fix.js?v=0.4"></script><script src="./adaptive-depth.js?v=0.4"></script></body>'
   );
   const headers = new Headers(response.headers);
   headers.set("Content-Type","text/html; charset=utf-8");
@@ -86,7 +88,8 @@ self.addEventListener("fetch", event => {
     url.pathname.endsWith("/sessoes/hotfix.js") ||
     url.pathname.endsWith("/sessoes/session-ui-fix.js") ||
     url.pathname.endsWith("/sessoes/session-start-v2.js") ||
-    url.pathname.endsWith("/sessoes/sync-completion-fix.js")
+    url.pathname.endsWith("/sessoes/sync-completion-fix.js") ||
+    url.pathname.endsWith("/sessoes/adaptive-depth.js")
   ){
     event.respondWith(networkFirst(event.request));
     return;
