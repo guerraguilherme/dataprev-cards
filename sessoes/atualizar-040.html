@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1647d8">
+<title>Atualizar DATAPREV Sessões</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f6fb;color:#162033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}.wrap{max-width:680px;margin:0 auto;padding:24px 14px 80px}.card{background:#fff;border:1px solid #d7deea;border-radius:18px;padding:20px;box-shadow:0 3px 12px rgba(18,38,63,.06)}h1{font-size:1.55rem;margin:0 0 12px}.status{padding:13px;border-radius:13px;background:#eef4ff;border:1px solid #bdd0ff;line-height:1.5;margin:14px 0}.ok{background:#e9f8f0;border-color:#9bd7b8;color:#075c34}.bad{background:#fff0ee;border-color:#f0a8a1;color:#8e1b12}button{width:100%;border:1px solid #155eef;background:#155eef;color:#fff;border-radius:13px;padding:13px;font:inherit;font-weight:800}.small{font-size:.86rem;color:#68758d;line-height:1.5}</style>
+</head>
+<body>
+<div class="wrap"><div class="card">
+<h1>Atualização segura para PWA 0.4</h1>
+<p class="small">Seu progresso, respostas, notas e configuração de sincronização não serão apagados. Apenas o cache técnico antigo das Sessões será substituído.</p>
+<div id="status" class="status">Preparando atualização…</div>
+<button id="openBtn" hidden>Abrir DATAPREV Sessões 0.4</button>
+</div></div>
+<script>
+(async()=>{
+  const status=document.getElementById('status');
+  const button=document.getElementById('openBtn');
+  const set=(text,type='')=>{status.textContent=text;status.className='status'+(type?' '+type:'');};
+  try{
+    set('Removendo apenas os caches antigos…');
+    if('serviceWorker' in navigator){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      for(const reg of regs){
+        if(reg.scope.includes('/sessoes/')) await reg.unregister();
+      }
+    }
+    if('caches' in window){
+      const keys=await caches.keys();
+      await Promise.all(keys.filter(k=>k.startsWith('dataprev-sessoes-')).map(k=>caches.delete(k)));
+    }
+    set('Instalando a versão 0.4…');
+    if('serviceWorker' in navigator){
+      const reg=await navigator.serviceWorker.register('./service-worker.js?v=040-force',{scope:'./',updateViaCache:'none'});
+      await reg.update();
+      await navigator.serviceWorker.ready;
+      if(!navigator.serviceWorker.controller){
+        await Promise.race([
+          new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true})),
+          new Promise(resolve=>setTimeout(resolve,3500))
+        ]);
+      }
+    }
+    set('Atualização concluída. O progresso local foi preservado.','ok');
+    button.hidden=false;
+    button.onclick=()=>location.replace('./?v=040-clean-'+Date.now());
+  }catch(error){
+    set('Não foi possível concluir automaticamente: '+error.message,'bad');
+    button.hidden=false;
+    button.textContent='Tentar abrir mesmo assim';
+    button.onclick=()=>location.replace('./?v=040-retry-'+Date.now());
+  }
+})();
+</script>
+</body>
+</html>
