@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const HOTFIX_VERSION = '0.2';
+  const HOTFIX_VERSION = '0.2.1';
   const SESSIONS_SYNC_KEY = 'dataprev_sessoes_sync_config_v1';
   const CARDS_SYNC_KEY = 'dataprev_cards_sync_config_v1';
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -219,6 +219,18 @@
   }
 
   function apply() {
+    if (!window.__dpSessionsRenderStatsPatched && typeof renderStats === 'function') {
+      const originalRenderStats = renderStats;
+      renderStats = function renderStatsPatched() {
+        originalRenderStats();
+        const summary = document.getElementById('contentSummary');
+        if (summary) {
+          summary.textContent = summary.textContent.replace(/PWA\s+[\d.]+/, `PWA ${HOTFIX_VERSION}`);
+        }
+      };
+      window.__dpSessionsRenderStatsPatched = true;
+    }
+
     renderConfigPanel();
 
     const syncButton = document.getElementById('syncBtn');
