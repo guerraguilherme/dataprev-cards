@@ -1,14 +1,15 @@
-const CACHE_NAME = "dataprev-sessoes-v8";
+const CACHE_NAME = "dataprev-sessoes-v9";
 const OLD_CACHE_PREFIX = "dataprev-sessoes-";
 const CORE = [
   "./sessions.json",
   "./PY-COND-R01.json",
   "./MAT-ALG-002.json",
   "./BD-NORM-002.json",
-  "./runtime-bridge.js?v=0.3",
-  "./catalog-loader.js?v=0.3",
-  "./hotfix.js?v=0.3",
-  "./session-ui-fix.js?v=0.3",
+  "./runtime-bridge.js?v=0.3.1",
+  "./catalog-loader.js?v=0.3.1",
+  "./hotfix.js?v=0.3.1",
+  "./session-ui-fix.js?v=0.3.1",
+  "./session-start-v2.js?v=0.3.1",
   "./manifest.webmanifest",
   "../icons/icon-192.png",
   "../icons/icon-512.png",
@@ -34,10 +35,11 @@ async function injectScripts(response) {
     .replace(/<script src="\.\/runtime-bridge\.js[^"]*"><\/script>/g, "")
     .replace(/<script src="\.\/catalog-loader\.js[^"]*"><\/script>/g, "")
     .replace(/<script src="\.\/hotfix\.js[^"]*"><\/script>/g, "")
-    .replace(/<script src="\.\/session-ui-fix\.js[^"]*"><\/script>/g, "");
+    .replace(/<script src="\.\/session-ui-fix\.js[^"]*"><\/script>/g, "")
+    .replace(/<script src="\.\/session-start-v2\.js[^"]*"><\/script>/g, "");
   const injected = cleaned.replace(
     "</body>",
-    '<script src="./runtime-bridge.js?v=0.3"></script><script src="./catalog-loader.js?v=0.3"></script><script src="./hotfix.js?v=0.3"></script><script src="./session-ui-fix.js?v=0.3"></script></body>'
+    '<script src="./runtime-bridge.js?v=0.3.1"></script><script src="./catalog-loader.js?v=0.3.1"></script><script src="./hotfix.js?v=0.3.1"></script><script src="./session-ui-fix.js?v=0.3.1"></script><script src="./session-start-v2.js?v=0.3.1"></script></body>'
   );
   const headers = new Headers(response.headers);
   headers.set("Content-Type","text/html; charset=utf-8");
@@ -80,7 +82,8 @@ self.addEventListener("fetch", event => {
     url.pathname.endsWith("/sessoes/runtime-bridge.js") ||
     url.pathname.endsWith("/sessoes/catalog-loader.js") ||
     url.pathname.endsWith("/sessoes/hotfix.js") ||
-    url.pathname.endsWith("/sessoes/session-ui-fix.js")
+    url.pathname.endsWith("/sessoes/session-ui-fix.js") ||
+    url.pathname.endsWith("/sessoes/session-start-v2.js")
   ){
     event.respondWith(networkFirst(event.request));
     return;
