@@ -1,4 +1,5 @@
-const CACHE_NAME = "dataprev-cards-v8";
+const CACHE_NAME = "dataprev-cards-v9";
+const CARDS_CACHE_PREFIX = "dataprev-cards-";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -21,7 +22,9 @@ self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+        keys
+          .filter(key => key.startsWith(CARDS_CACHE_PREFIX) && key !== CACHE_NAME)
+          .map(key => caches.delete(key))
       ))
       .then(() => self.clients.claim())
   );
@@ -31,7 +34,7 @@ async function injectHotfix(response) {
   const text = await response.text();
   const injected = text.includes("./hotfix.js")
     ? text
-    : text.replace("</body>", '<script src="./hotfix.js?v=1.5.2"></script></body>');
+    : text.replace("</body>", '<script src="./hotfix.js?v=1.5.3"></script></body>');
 
   const headers = new Headers(response.headers);
   headers.set("Content-Type", "text/html; charset=utf-8");
@@ -49,11 +52,18 @@ self.addEventListener("fetch", event => {
 
   const url = new URL(event.request.url);
 
-  // Requisições do Apps Script devem passar direto pelo navegador.
+  // Requisições externas passam direto pelo navegador.
   if (url.origin !== self.location.origin) return;
 
-  const isSessionsPath = url.pathname.includes("/sessoes/");
-  const isRootNavigation = event.request.mode === "navigate" && !isSessionsPath;
+  // O DATAPREV Sessões possui service worker e cache próprios.
+  // Nenhuma rota cujo primeiro segmento comece por "sessoes" deve ser
+  // interceptada, armazenada ou substituída pelo aplicativo de Cards.
+  const relativePath = url.pathname.replace(self.registration.scope.replace(url.origin, ""), "");
+  const firstSegment = relativePath.split("/").filter(Boolean)[0] || "";
+  const isSessionsPath = firstSegment.startsWith("sessoes");
+  if (isSessionsPath) return;
+
+  const isRootNavigation = event.request.mode === "navigate";
 
   if (isRootNavigation) {
     event.respondWith((async () => {
@@ -77,7 +87,7 @@ self.addEventListener("fetch", event => {
 
   if (isCardsFile) {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, {cache: "no-store"})
         .then(response => {
           if (!response || !response.ok) throw new Error("Resposta de rede inválida.");
           const copy = response.clone();
