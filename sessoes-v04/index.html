@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1647d8">
+<link rel="manifest" href="./manifest.webmanifest?v=041">
+<title>DATAPREV Sessões — carregando 0.4</title>
+<style>
+body{margin:0;background:#f3f6fb;color:#162033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+.loader{max-width:720px;margin:0 auto;padding:24px 18px}.card{background:#fff;border:1px solid #d7deea;border-radius:18px;padding:20px;box-shadow:0 3px 12px rgba(18,38,63,.05)}
+.status{margin-top:14px;padding:12px;border-radius:12px;background:#eef4ff;color:#173f91;line-height:1.45}.bad{background:#fff0ee;color:#8e1b12}
+</style>
+</head>
+<body>
+<div class="loader"><div class="card"><h1>DATAPREV Sessões</h1><p>Carregando a versão limpa 0.4…</p><div id="status" class="status">Preservando seu progresso local e preparando a sessão atual.</div></div></div>
+<script>
+(async()=>{
+  const status=document.getElementById('status');
+  try{
+    const mapKey='dataprev_sessoes_states_v2';
+    const legacyKey='dataprev_sessoes_state_v1';
+    let states={};
+    try{states=JSON.parse(localStorage.getItem(mapKey)||'{}')||{};}catch{}
+
+    const preferred=states['MAT-ALG-002']&&states['MAT-ALG-002'].startedAt&&!states['MAT-ALG-002'].completedAt
+      ? states['MAT-ALG-002']
+      : Object.values(states)
+          .filter(s=>s&&s.startedAt&&!s.completedAt&&s.phase!=='complete')
+          .sort((a,b)=>(b.lastTick||0)-(a.lastTick||0))[0];
+    if(preferred)localStorage.setItem(legacyKey,JSON.stringify(preferred));
+
+    const response=await fetch('../sessoes/index.html?clean=041',{cache:'reload'});
+    if(!response.ok)throw new Error('Não foi possível carregar a base do aplicativo.');
+    let html=await response.text();
+    html=html
+      .replace(/<link rel="manifest" href="\.\/manifest\.webmanifest">/,'<link rel="manifest" href="./manifest.webmanifest?v=041">')
+      .replace(/DATAPREV Sessões — PWA 0\.1/g,'DATAPREV Sessões — PWA 0.4')
+      .replace(/Estudo guiado · PWA 0\.1/g,'Estudo guiado · PWA 0.4')
+      .replace('const APP_VERSION="0.1";','const APP_VERSION="0.4";')
+      .replace('fetch("./sessions.json"','fetch("../sessoes/sessions.json"')
+      .replace(/if\("serviceWorker" in navigator\)navigator\.serviceWorker\.register\("\.\/service-worker\.js"\)\.catch\(console\.warn\);/,'')
+      .replace('</body>',`<script src="./catalog-loader.js?v=041"><\/script><script src="../sessoes/runtime-bridge.js?v=041"><\/script><script src="../sessoes/hotfix.js?v=041"><\/script><script src="../sessoes/session-ui-fix.js?v=041"><\/script><script src="../sessoes/session-start-v2.js?v=041"><\/script><script src="../sessoes/sync-completion-fix.js?v=041"><\/script><script src="../sessoes/adaptive-depth.js?v=041"><\/script><script src="../sessoes/adaptive-position-fix.js?v=041"><\/script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./service-worker.js?v=041').catch(console.warn)}<\/script></body>`);
+    document.open();document.write(html);document.close();
+  }catch(error){status.textContent='Falha ao abrir a versão limpa: '+error.message;status.classList.add('bad');}
+})();
+</script>
+</body>
+</html>
