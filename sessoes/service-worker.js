@@ -1,9 +1,9 @@
-const CACHE_NAME = "dataprev-sessoes-v3";
+const CACHE_NAME = "dataprev-sessoes-v4";
 const OLD_CACHE_PREFIX = "dataprev-sessoes-";
 const CORE = [
   "./sessions.json",
   "./manifest.webmanifest",
-  "./hotfix.js",
+  "./hotfix.js?v=0.2.1",
   "../icons/icon-192.png",
   "../icons/icon-512.png",
   "../icons/apple-touch-icon.png"
@@ -100,7 +100,7 @@ self.addEventListener("fetch", event => {
   }
 
   if (url.pathname.endsWith("/sessoes/hotfix.js")) {
-    event.respondWith(dataNetworkFirst(event.request, "./hotfix.js"));
+    event.respondWith(dataNetworkFirst(event.request, "./hotfix.js?v=0.2.1"));
     return;
   }
 
