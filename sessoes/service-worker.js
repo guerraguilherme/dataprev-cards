@@ -1,4 +1,4 @@
-const CACHE_NAME = "dataprev-sessoes-v7";
+const CACHE_NAME = "dataprev-sessoes-v8";
 const OLD_CACHE_PREFIX = "dataprev-sessoes-";
 const CORE = [
   "./sessions.json",
@@ -8,6 +8,7 @@ const CORE = [
   "./runtime-bridge.js?v=0.3",
   "./catalog-loader.js?v=0.3",
   "./hotfix.js?v=0.3",
+  "./session-ui-fix.js?v=0.3",
   "./manifest.webmanifest",
   "../icons/icon-192.png",
   "../icons/icon-512.png",
@@ -32,10 +33,11 @@ async function injectScripts(response) {
   const cleaned = text
     .replace(/<script src="\.\/runtime-bridge\.js[^"]*"><\/script>/g, "")
     .replace(/<script src="\.\/catalog-loader\.js[^"]*"><\/script>/g, "")
-    .replace(/<script src="\.\/hotfix\.js[^"]*"><\/script>/g, "");
+    .replace(/<script src="\.\/hotfix\.js[^"]*"><\/script>/g, "")
+    .replace(/<script src="\.\/session-ui-fix\.js[^"]*"><\/script>/g, "");
   const injected = cleaned.replace(
     "</body>",
-    '<script src="./runtime-bridge.js?v=0.3"></script><script src="./catalog-loader.js?v=0.3"></script><script src="./hotfix.js?v=0.3"></script></body>'
+    '<script src="./runtime-bridge.js?v=0.3"></script><script src="./catalog-loader.js?v=0.3"></script><script src="./hotfix.js?v=0.3"></script><script src="./session-ui-fix.js?v=0.3"></script></body>'
   );
   const headers = new Headers(response.headers);
   headers.set("Content-Type","text/html; charset=utf-8");
@@ -77,7 +79,8 @@ self.addEventListener("fetch", event => {
     url.pathname.endsWith("/sessoes/BD-NORM-002.json") ||
     url.pathname.endsWith("/sessoes/runtime-bridge.js") ||
     url.pathname.endsWith("/sessoes/catalog-loader.js") ||
-    url.pathname.endsWith("/sessoes/hotfix.js")
+    url.pathname.endsWith("/sessoes/hotfix.js") ||
+    url.pathname.endsWith("/sessoes/session-ui-fix.js")
   ){
     event.respondWith(networkFirst(event.request));
     return;
