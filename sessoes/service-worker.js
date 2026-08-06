@@ -1,10 +1,11 @@
-const CACHE_NAME = "dataprev-sessoes-v6";
+const CACHE_NAME = "dataprev-sessoes-v7";
 const OLD_CACHE_PREFIX = "dataprev-sessoes-";
 const CORE = [
   "./sessions.json",
   "./PY-COND-R01.json",
   "./MAT-ALG-002.json",
   "./BD-NORM-002.json",
+  "./runtime-bridge.js?v=0.3",
   "./catalog-loader.js?v=0.3",
   "./hotfix.js?v=0.3",
   "./manifest.webmanifest",
@@ -29,11 +30,12 @@ self.addEventListener("activate", event => {
 async function injectScripts(response) {
   const text = await response.text();
   const cleaned = text
+    .replace(/<script src="\.\/runtime-bridge\.js[^"]*"><\/script>/g, "")
     .replace(/<script src="\.\/catalog-loader\.js[^"]*"><\/script>/g, "")
     .replace(/<script src="\.\/hotfix\.js[^"]*"><\/script>/g, "");
   const injected = cleaned.replace(
     "</body>",
-    '<script src="./catalog-loader.js?v=0.3"></script><script src="./hotfix.js?v=0.3"></script></body>'
+    '<script src="./runtime-bridge.js?v=0.3"></script><script src="./catalog-loader.js?v=0.3"></script><script src="./hotfix.js?v=0.3"></script></body>'
   );
   const headers = new Headers(response.headers);
   headers.set("Content-Type","text/html; charset=utf-8");
@@ -73,6 +75,7 @@ self.addEventListener("fetch", event => {
     url.pathname.endsWith("/sessoes/PY-COND-R01.json") ||
     url.pathname.endsWith("/sessoes/MAT-ALG-002.json") ||
     url.pathname.endsWith("/sessoes/BD-NORM-002.json") ||
+    url.pathname.endsWith("/sessoes/runtime-bridge.js") ||
     url.pathname.endsWith("/sessoes/catalog-loader.js") ||
     url.pathname.endsWith("/sessoes/hotfix.js")
   ){
